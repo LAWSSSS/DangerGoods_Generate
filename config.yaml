@@ -1,0 +1,46 @@
+# 模型选择
+# 默认走路由函数；route 暂时留空时，使用下面的 model / vlm_model
+route: ""
+
+# 生图模型（route 为空时生效）
+# 可选：wan2.7-image / wan2.7-image-pro / doubao-seedream-5.0-lite / doubao-seedream-5.0-pro
+model: "wan2.7-image"
+
+# VLM 模型（route 为空时生效）
+# 可选：qwen3.8-flash / qwen3.8-max / doubao-seed-2.1-pro
+vlm_model: "qwen3.8-flash"
+
+# 图像参数
+size: "2K"
+output_format: "png"
+watermark: false
+max_images: 1
+
+# 融合参数
+object_resize_scale: 0.008
+object_canvas_scale: 1.0
+object_opacity: 0.5
+object_anchor: "center"
+
+# VLM优化配置
+enable_vlm_optimization: true
+max_optimization_rounds: 3
+size_tolerance: "very_small"
+
+# 目录配置
+backgrounds_dir: "input/backgrounds"
+objects_dir: "input/objects"
+prompt_templates_path: "prompts/prompt_templates.json"
+negative_prompt_path: "prompts/negative_prompt.txt"
+output_images_dir: "output/images"
+output_final_images_dir: "output/final_images"
+output_metadata_dir: "output/metadata"
+output_failed_dir: "output/failed"
+output_bbox_dir: "output/bbox"
+output_analysis_dir: "output/analysis"
+
+# 其他配置
+timeout_seconds: 300
+sleep_seconds: 1.0
+total_num: 100
+seed: null

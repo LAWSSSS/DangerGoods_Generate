@@ -1,0 +1,18 @@
+# Secrets
+config_bailian.yaml
+
+# Generated outputs
+output/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# OS / editor
+.DS_Store
+*.swp
+
+# Debug payloads with signed URLs
+debug_response.json
