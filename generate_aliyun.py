@@ -197,6 +197,7 @@ class AppConfig:
     seed: Optional[int]
     
     object_resize_scale: float
+    object_resize_scales: Dict[str, Tuple[float, float]]
     object_canvas_scale: float
     object_opacity: float
     object_anchor: str
@@ -220,13 +221,13 @@ class AppConfig:
     size_tolerance: str = "very_small"
     
     vlm_evaluator_prompt: str = field(default_factory=lambda: (
-        "请仔细分析这张合成图片，判断其中添加的异物是否过大。\n"
+        "请仔细分析这张合成图片，判断其中添加的异物尺寸是否符合该类别的真实大小。\n"
         "判定标准：\n"
-        "1. 异物是否第一眼就能被注意到？如果是，则判定为'太大'\n"
-        "2. 异物是否比周围大多数废钢块更大？如果是，则判定为'太大'\n"
-        "3. 异物是否占据画面中显眼的主体位置？如果是，则判定为'太大'\n"
-        "4. 异物是否几乎难以察觉，需要仔细寻找才能发现？则判定为'合格'\n"
-        "5. 异物是否完全看不见或几乎不存在？则判定为'稍微有点小'\n"
+        "1. 对照提示中的目标可见宽度（占画面宽度的百分比），明显大于该范围则判定为'太大'\n"
+        "2. 异物相对同类真实物体过小、或几乎看不见则判定为'太小'\n"
+        "3. 气瓶、储罐、DN350阀门等本来就比钢板条更长，只要没变成画面主体，不应只因为能被看见就判太大\n"
+        "4. 密封胶罐、自喷漆罐等小件如果画得像灭火器一样大，判定为'太大'\n"
+        "5. 尺寸落在目标范围内、大部分被废钢遮挡但仍可辨认，判定为'合格'\n"
         "6. 异物是否出现能识别一部分的文字、字母、数字或标识？如果是，则判定为文字需要模糊化\n"
         "7. 异物是否有人工摆放的痕迹或不自然的姿态？如果是，则判定为需要调整姿态\n"
         "请以JSON格式输出：{\"size_judgment\": \"too_large|acceptable|too_small\", "
@@ -239,34 +240,105 @@ class AppConfig:
 
 # ============ 尺寸计算工具 ============
 
-def calculate_optimal_size(background_path: Path, object_path: Path = None) -> Dict[str, Any]:
+OBJECT_SCALE_ALIASES = {
+    "fire_extinguisher": "灭火器",
+    "gas_cylinder": "气瓶",
+    "hydraulic_cylinder": "液压缸",
+    "shock_absorber": "减震器",
+    "accumulator": "集油器",
+    "sealed_container": "储罐",
+    "filter": "分离过滤器",
+    "jack": "千斤顶",
+    "pesticide_can": "杀虫剂罐",
+    "pneumatic_cylinder": "气缸",
+    "spray_paint_can": "自喷漆罐",
+    "ball_valve": "球阀",
+    "bearing_housing": "轴承座",
+    "sealant_can": "密封胶罐",
+}
+
+
+def parse_object_resize_scales(raw: Dict[str, Any]) -> Dict[str, Tuple[float, float]]:
+    """读取 config.yaml 中每个物体的 [min, max] 或单值，单位为可见最长边/画面宽度。"""
+    fallback = float(raw.get("object_resize_scale", 0.022))
+    parsed: Dict[str, Tuple[float, float]] = {}
+    data = raw.get("object_resize_scales") or {}
+    if not isinstance(data, dict):
+        raise ValueError("object_resize_scales 必须是按物体类别分组的字典")
+    for key, value in data.items():
+        name = str(key).strip()
+        if not name:
+            raise ValueError("object_resize_scales 含有空类别名")
+        if isinstance(value, (int, float)) and not isinstance(value, bool):
+            low = high = float(value)
+        elif isinstance(value, dict):
+            low = float(value.get("min", fallback))
+            high = float(value.get("max", low))
+        elif isinstance(value, (list, tuple)) and len(value) == 2:
+            low, high = float(value[0]), float(value[1])
+        else:
+            raise ValueError(f"物体 {name} 的缩放尺寸格式无效，请使用 [min, max]")
+        if low > high:
+            low, high = high, low
+        if not 0 < low <= high < 1:
+            raise ValueError(f"物体 {name} 的缩放尺寸须满足 0 < min <= max < 1，当前 {low}–{high}")
+        parsed[name] = (low, high)
+    return parsed
+
+
+def object_scale_range(cfg: AppConfig, object_class: Optional[str] = None) -> Tuple[float, float]:
+    fallback = (cfg.object_resize_scale, cfg.object_resize_scale)
+    if not object_class:
+        return fallback
+    scales = cfg.object_resize_scales or {}
+    if object_class in scales:
+        return scales[object_class]
+    canonical = OBJECT_SCALE_ALIASES.get(object_class)
+    if canonical and canonical in scales:
+        return scales[canonical]
+    for name, rng in scales.items():
+        if name and (name in object_class or object_class in name):
+            return rng
+    return fallback
+
+
+def sample_object_resize_scale(cfg: AppConfig, object_class: Optional[str] = None) -> float:
+    low, high = object_scale_range(cfg, object_class)
+    return random.uniform(low, high) if high > low else low
+
+
+def calculate_optimal_size(
+    background_path: Path,
+    object_class: Optional[str] = None,
+    cfg: Optional[AppConfig] = None,
+    target_ratio: Optional[float] = None,
+) -> Dict[str, Any]:
     bg_img = Image.open(background_path)
     bg_w, bg_h = bg_img.size
-    
-    if bg_w >= 3840:
-        target_ratio = random.uniform(0.008, 0.018)
-    elif bg_w >= 1920:
-        target_ratio = random.uniform(0.012, 0.025)
-    else:
-        target_ratio = random.uniform(0.015, 0.03)
-    
-    target_width = int(bg_w * target_ratio)
-    target_height = int(bg_h * target_ratio)
-    
-    min_size = max(25, int(min(bg_w, bg_h) * 0.006))
-    target_width = max(target_width, min_size)
-    target_height = max(target_height, min_size)
-    
-    max_size = int(min(bg_w, bg_h) * 0.04)
-    target_width = min(target_width, max_size)
-    target_height = min(target_height, max_size)
-    
+    scale_min, scale_max = (
+        object_scale_range(cfg, object_class) if cfg is not None
+        else (0.016, 0.034)
+    )
+    if target_ratio is None:
+        target_ratio = (
+            sample_object_resize_scale(cfg, object_class) if cfg is not None
+            else random.uniform(scale_min, scale_max)
+        )
+    target_ratio = min(max(target_ratio, scale_min * 0.8), scale_max * 1.15)
+    target_width = max(16, int(round(bg_w * target_ratio)))
+    target_height = max(16, int(round(bg_h * target_ratio)))
     return {
         "bg_size": (bg_w, bg_h),
         "target_width": target_width,
         "target_height": target_height,
         "target_ratio": target_ratio,
-        "description": f"约 {target_width}x{target_height} 像素（画面宽度的{target_ratio*100:.1f}%）"
+        "scale_min": scale_min,
+        "scale_max": scale_max,
+        "object_class": object_class,
+        "description": (
+            f"{object_class or '异物'}可见最长边约 {target_width} 像素"
+            f"（画面宽度的{target_ratio*100:.1f}%，配置 {scale_min*100:.1f}–{scale_max*100:.1f}%）"
+        ),
     }
 
 
@@ -1093,7 +1165,8 @@ class VLMAnalyzer:
         self,
         generated_image_path: Path,
         object_class: str,
-        original_prompt: str
+        original_prompt: str,
+        target_ratio: Optional[float] = None,
     ) -> Dict[str, Any]:
         """
         VLM 评估生成的图片 - 自动压缩图片避免 413 错误
@@ -1117,14 +1190,17 @@ class VLMAnalyzer:
             print(f"  [VLM] 图片压缩失败: {e}，使用原始图片")
             compressed_data_url = image_to_data_url_vlm(generated_image_path)
 
+        scale_min, scale_max = object_scale_range(self.cfg, object_class)
+        ratio = target_ratio if target_ratio is not None else (scale_min + scale_max) / 2
         user_prompt = (
-            f"请仔细分析这张合成图片。判断图片中添加的{object_class}是否过大。\n"
+            f"请仔细分析这张合成图片。判断其中的{object_class}是否符合真实尺寸。\n"
+            f"该类别目标可见最长边约占画面宽度的{ratio:.1%}，允许范围{scale_min:.1%}–{scale_max:.1%}。\n"
             f"评估标准：\n"
-            f"1. 异物是否第一眼就能被注意到？如果是，则判定为'太大'\n"
-            f"2. 异物是否比周围大多数废钢块更大？如果是，则判定为'太大'\n"
-            f"3. 异物是否占据画面中显眼的主体位置？如果是，则判定为'太大'\n"
-            f"4. 异物是否几乎难以察觉，需要仔细寻找才能发现？则判定为'合格'\n"
-            f"5. 异物是否完全看不见或几乎不存在？则判定为'太小'\n"
+            f"1. 明显大于允许范围，或被画成占据画面主体，判定为'太大'\n"
+            f"2. 明显小于允许范围，或几乎看不见、没放进去，判定为'太小'\n"
+            f"3. 落在允许范围内、大部分被废钢挡住但仍可辨认，判定为'合格'\n"
+            f"4. 气瓶、储罐、大型阀门本身就比小钢条长，不要只因为能看见就判太大\n"
+            f"5. 小件（密封胶罐、自喷漆罐等）如果画得像灭火器那么大，判定为'太大'\n"
             f"6. 异物是否出现能识别一部分的文字、字母、数字或标识？如果是，则判定为文字需要模糊化\n"
             f"7. 异物是否有人工摆放的痕迹或不自然的姿态？如果是，则判定为需要调整姿态\n"
             f"输出JSON格式："
@@ -1150,7 +1226,14 @@ class VLMAnalyzer:
         )
         return response
     
-    def optimize_prompt(self, previous_prompt: str, evaluation_result: Dict, object_class: str, round_num: int) -> str:
+    def optimize_prompt(
+        self,
+        previous_prompt: str,
+        evaluation_result: Dict,
+        object_class: str,
+        round_num: int,
+        target_ratio: Optional[float] = None,
+    ) -> Tuple[str, float]:
         judgment = evaluation_result.get("size_judgment", "acceptable")
         suggestion = evaluation_result.get("improvement_suggestion", "")
         
@@ -1158,19 +1241,24 @@ class VLMAnalyzer:
         core_lines = [l for l in lines if not l.startswith("调整：") and not l.startswith("【尺寸约束】")]
         core = "\n".join(core_lines)
         
-        base_ratio = self.cfg.object_resize_scale
+        scale_min, scale_max = object_scale_range(self.cfg, object_class)
+        current = target_ratio if target_ratio is not None else (scale_min + scale_max) / 2
         if judgment == "too_small":
-            new_ratio = base_ratio * random.uniform(2.0, 3.5)
+            new_ratio = min(scale_max * 1.12, current * random.uniform(1.15, 1.45))
             fix = (
                 f"上一轮异物没有放进去或完全看不见。这一轮必须放入{object_class}，"
-                f"放大到约画面宽度的{new_ratio:.2%}，并露出能辨认的一小段，不要再交回一张原背景"
+                f"按该物体真实大小放到约画面宽度的{new_ratio:.2%}，并露出能辨认的一小段，不要再交回一张原背景"
             )
             occlusion = "留出能辨认的一小段，不要完全埋进废钢里"
         elif judgment == "too_large":
-            new_ratio = base_ratio * random.uniform(0.4, 0.6)
-            fix = f"明显缩小到{new_ratio:.2%}，更深地嵌入废钢内部，90%以上被遮挡"
+            new_ratio = max(scale_min * 0.88, current * random.uniform(0.70, 0.88))
+            fix = (
+                f"缩小到约画面宽度的{new_ratio:.2%}（仍保持{object_class}的真实相对大小），"
+                f"更深地嵌入废钢内部，大部分被遮挡"
+            )
         else:
-            fix = f"保持当前尺寸（{base_ratio:.1%}），确保形态完整，边缘被遮挡"
+            new_ratio = min(max(current, scale_min), scale_max)
+            fix = f"保持{object_class}真实尺寸（约画面宽度的{new_ratio:.1%}），确保形态完整，边缘被遮挡"
         
         positions = self.prompt_enhancer.get_position_descriptions("")
         if judgment != "too_small":
@@ -1189,7 +1277,7 @@ class VLMAnalyzer:
                 "让异物与废钢的锈蚀纹理和色调一致，看起来像是自然嵌入的废弃部件，并留下能辨认的一小段。",
             ])
         
-        return f"{core}\n调整：{fix}。{suggestion}。{occlusion}。{shape_fix}{fusion_fix}"
+        return f"{core}\n调整：{fix}。{suggestion}。{occlusion}。{shape_fix}{fusion_fix}", new_ratio
     
     def run_optimization_loop(
         self,
@@ -1199,6 +1287,7 @@ class VLMAnalyzer:
         base_prompt: str = None,
         initial_generation_func: callable = None,
         image_id: str = None,
+        size_state: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         self.optimization_history = []
         self.reset_vlm_session()
@@ -1214,6 +1303,8 @@ class VLMAnalyzer:
         previous_path: Optional[Path] = None
         success = False
 
+        if size_state is None:
+            size_state = {"ratio": sample_object_resize_scale(self.cfg, object_class)}
         print(f"  [VLM] 异物原图不送入对话，类别={object_class}，文件={object_path.name}")
         print(f"  [VLM] 首轮：背景图与初始prompt，并做几何定位")
         opening: Dict[str, Any] = {}
@@ -1262,7 +1353,9 @@ class VLMAnalyzer:
             last_full_prompt = full_prompt
             previous_path = generated_path
 
-            evaluation = self.evaluate_generated_image(generated_path, object_class, current_prompt)
+            evaluation = self.evaluate_generated_image(
+                generated_path, object_class, current_prompt, size_state.get("ratio"),
+            )
             
             size_judgment = evaluation.get("size_judgment", "acceptable")
             confidence = evaluation.get("confidence", 0.5)
@@ -1322,7 +1415,9 @@ class VLMAnalyzer:
                 break
             
             print(f"  [VLM] 🔄 优化Prompt (第{round_num}轮反馈)...")
-            current_prompt = self.optimize_prompt(current_prompt, evaluation, object_class, round_num)
+            current_prompt, size_state["ratio"] = self.optimize_prompt(
+                current_prompt, evaluation, object_class, round_num, size_state.get("ratio"),
+            )
             self.optimization_history.append({"stage": f"refined_prompt_round_{round_num}", "prompt": current_prompt})
             print(f"  [VLM] 优化后Prompt: {current_prompt}")
         
@@ -1592,17 +1687,25 @@ def build_prompt(
     background_path: Path = None,
     position_hint: str = None,
     orientation_hint: str = None,
+    cfg: Optional[AppConfig] = None,
+    target_ratio: Optional[float] = None,
 ) -> str:
     size_info = ""
     if background_path:
         try:
-            size_data = calculate_optimal_size(background_path, object_path)
+            size_data = calculate_optimal_size(
+                background_path, object_class, cfg, target_ratio,
+            )
             target_w = size_data["target_width"]
-            target_h = size_data["target_height"]
             ratio = size_data["target_ratio"] * 100
-            size_info = f"异物尺寸必须极小：仅占画面宽度的{ratio:.1f}%（约{target_w}x{target_h}像素），约为成人指甲盖大小"
-        except:
-            size_info = "异物尺寸必须极小：画面宽度的1.5-2.5%，约为成人指甲盖大小"
+            lo, hi = size_data["scale_min"] * 100, size_data["scale_max"] * 100
+            size_info = (
+                f"{object_class}按真实尺寸：可见最长边约占画面宽度的{ratio:.1f}%"
+                f"（约{target_w}像素，该类别配置 {lo:.1f}–{hi:.1f}%）。"
+                f"保持该物体相对废钢的真实大小，不要画成玩具，也不要画成画面主体"
+            )
+        except Exception:
+            size_info = f"{object_class}必须按真实物体大小出现，不要画成玩具或占据整幅画面"
     
     enhancer = PromptEnhancer()
     weathering = random.choice(enhancer.get_weathering_descriptions(object_class))
@@ -1612,8 +1715,8 @@ def build_prompt(
     fusion_enhance = (
         "【精确尺寸控制】\n"
         f"1. {size_info}\n"
-        "2. 异物必须比画面中大多数废钢块更小，但必须真实出现，并留下能辨认的一小段\n"
-        "3. 如果异物过大，必须缩小；如果上一轮没有放进去或完全看不见，这一轮必须放入并稍微放大\n"
+        "2. 异物必须按该类别真实大小出现，大部分被废钢挡住，但仍留下能辨认的一段\n"
+        "3. 如果明显大于该类真实尺寸则缩小；如果没放进去或完全看不见，这一轮必须按真实尺寸放入\n"
         "\n【形状严格保持】\n"
         f"4. 必须严格保持{object_class}原本的形状、结构、比例和轮廓特征\n"
         "5. 不允许任何形式的变形、拉伸、扭曲或比例改变\n"
@@ -1648,7 +1751,7 @@ def build_prompt(
         f"{fusion_enhance}\n"
         f"目标异物类别：{object_class}。\n"
         "不要改变废钢场景、时间戳和摄像头点位文字，不要改变视角，"
-        "不要生成卡通风格，不要生成干净崭新或悬浮的异物，不要让异物过大。\n"
+        "不要生成卡通风格，不要生成干净崭新或悬浮的异物，不要偏离该类别的真实尺寸。\n"
         f"【必须放入】必须把{object_class}放进第1张背景图的指定位置。"
         "可以小、大部分被遮挡，但必须露出能辨认的一小段。"
         "禁止省略异物，禁止输出一张与背景图相同的图。"
@@ -1985,7 +2088,7 @@ def load_app_config() -> AppConfig:
     print(f"[DEBUG] VLM 端点: {bound['vlm_api_url']}")
     print(f"[DEBUG] VLM API Key: {bound['vlm_api_key'][:30]}...")
 
-    return AppConfig(
+    cfg = AppConfig(
         image_api_key=bound["image_api_key"],
         model=bound["model"],
         image_api_url=bound["image_api_url"],
@@ -1994,8 +2097,9 @@ def load_app_config() -> AppConfig:
         output_format=raw.get("output_format", "png"),
         watermark=bool(raw.get("watermark", False)),
         max_images=int(raw.get("max_images", 1)),
-        object_resize_scale=float(raw.get("object_resize_scale", 0.018)),
-        object_canvas_scale=float(raw.get("object_canvas_scale", 1.0)),
+        object_resize_scale=float(raw_app.get("object_resize_scale", raw.get("object_resize_scale", 0.022))),
+        object_resize_scales=parse_object_resize_scales(raw_app),
+        object_canvas_scale=float(raw_app.get("object_canvas_scale", raw.get("object_canvas_scale", 1.0))),
         object_opacity=float(raw.get("object_opacity", 0.5)),
         object_anchor=raw.get("object_anchor", "center"),
         timeout_seconds=int(raw.get("timeout_seconds", 300)),
@@ -2015,10 +2119,12 @@ def load_app_config() -> AppConfig:
         vlm_api_key=bound["vlm_api_key"],
         vlm_api_url=bound["vlm_api_url"],
         vlm_model=bound["vlm_model"],
-        enable_vlm_optimization=raw.get("enable_vlm_optimization", True),
-        max_optimization_rounds=int(raw.get("max_optimization_rounds", 3)),
-        size_tolerance=raw.get("size_tolerance", "very_small"),
+        enable_vlm_optimization=raw_app.get("enable_vlm_optimization", raw.get("enable_vlm_optimization", True)),
+        max_optimization_rounds=int(raw_app.get("max_optimization_rounds", raw.get("max_optimization_rounds", 3))),
+        size_tolerance=raw_app.get("size_tolerance", raw.get("size_tolerance", "very_small")),
     )
+    print(f"[DEBUG] 已加载 {len(cfg.object_resize_scales)} 类物体真实缩放尺寸")
+    return cfg
 
 
 # ============ 主函数 ============
@@ -2162,8 +2268,10 @@ def main() -> None:
         
         object_class = selected_item["class"]
         object_path = selected_item["path"]
-        
+        size_data = calculate_optimal_size(background_path, object_class, cfg)
+        size_state = {"ratio": size_data["target_ratio"]}
         print(f"  [物体] 选择: {object_path.name} (类别: {object_class}, 权重: {selected_item['weight']})")
+        print(f"  [尺寸] {size_data['description']}")
         
         base_prompt = random.choice(prompt_templates[object_class])
         
@@ -2202,6 +2310,8 @@ def main() -> None:
                         background_path=background_path,
                         position_hint=position_hint,
                         orientation_hint=orientation_hint,
+                        cfg=cfg,
+                        target_ratio=size_state["ratio"],
                     )
                     api_result, labeled = generate_single_call(
                         cfg, background_path, round_prompt, previous_path,
@@ -2220,6 +2330,7 @@ def main() -> None:
                     base_prompt=base_prompt,
                     initial_generation_func=generate_with_prompt,
                     image_id=image_id,
+                    size_state=size_state,
                 )
                 final_prompt = outcome["final_prompt"]
                 full_prompt = outcome["full_prompt"]
@@ -2253,6 +2364,8 @@ def main() -> None:
                     background_path=background_path,
                     position_hint=position_hint,
                     orientation_hint=orientation_hint,
+                    cfg=cfg,
+                    target_ratio=size_state["ratio"],
                 )
                 result, full_prompt = generate_single_call(cfg, background_path, round_prompt)
                 final_prompt = full_prompt
@@ -2275,6 +2388,12 @@ def main() -> None:
                 "background_image": str(background_path),
                 "object_image": str(object_path) if object_path else None,
                 "object_class": object_class,
+                "object_scale": {
+                    "target_ratio": size_state["ratio"],
+                    "scale_min": size_data["scale_min"],
+                    "scale_max": size_data["scale_max"],
+                    "description": size_data["description"],
+                },
                 "base_prompt": base_prompt,
                 "final_prompt": final_prompt,
                 "full_prompt": full_prompt,
