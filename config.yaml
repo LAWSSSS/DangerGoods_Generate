@@ -8,7 +8,7 @@ model: "wan2.7-image"
 
 # VLM 模型（route 为空时生效）
 # 可选：qwen3.8-flash / qwen3.8-max / doubao-seed-2.1-pro
-vlm_model: "qwen3.8-flash"
+vlm_model: "doubao-seed-2.1-pro"
 
 # 图像参数
 size: "2K"
@@ -18,35 +18,181 @@ max_images: 1
 
 # 融合参数
 # object_resize_scale 是缺省值；有类别配置时以 object_resize_scales 为准
-# 数值 = 可见最长边 / 画面宽度。按约 2.4 m 宽的废钢车斗实拍推算真实物体长度
-object_resize_scale: 0.022
+# 缺省可见边比例。有 object_size_briefs 时，允许范围改为真实厘米 / 240厘米车斗视野
+# 下限约真实横截面，上限约真实参照长度，不再把筒径缩成几厘米的模型
+object_resize_scale: 0.06
 object_resize_scales:
-  # 小件包装、滤杯、座体
-  密封胶罐: [0.016, 0.024]    # 广口瓶高约 8–11 cm
-  集油器: [0.018, 0.028]      # 油水分离杯总高约 16 cm
-  轴承座: [0.020, 0.032]      # UCP210 座长约 21 cm
-  自喷漆罐: [0.018, 0.028]    # 400 ml 罐高约 21–23 cm
-  杀虫剂罐: [0.022, 0.034]    # 600 ml 气雾罐高约 28–32 cm
-  # 中件工具、减震、灭火器
-  减震器: [0.020, 0.038]      # 气压约 15–19 cm；液压减震更长
-  千斤顶: [0.028, 0.042]      # 10 t 瓶式最低约 23 cm，升起约 46 cm
-  气缸: [0.025, 0.040]        # ISO 拉杆缸含行程常见 30–50 cm
-  灭火器: [0.032, 0.048]      # 6 kg 手提式总高约 50–55 cm
-  # 较大液压件与罐体（整件超过 0.8 m 时按埋入后仍可辨认的一段）
-  分离过滤器: [0.035, 0.052]  # 旋风罐总高约 0.5–0.8 m
-  油缸: [0.042, 0.062]        # 重型耳环油缸含杆常超过 1 m
-  液压缸: [0.040, 0.058]      # 耳环液压缸行程常见 0.1–0.8 m
-  球阀: [0.045, 0.070]        # DN350 阀体/法兰可见段约 0.4–0.7 m
-  气瓶: [0.050, 0.075]        # 中型钢瓶可见段约 0.5–0.8 m（整瓶 0.8–1.5 m）
-  储罐: [0.055, 0.080]        # 小型立式罐可见段约 0.6–0.9 m（整罐可达 2 m+）
+  密封胶罐: [0.025, 0.044]    # 瓶径7cm–瓶高9.5cm
+  集油器: [0.032, 0.073]      # 杯径9cm–杯高16cm
+  轴承座: [0.041, 0.096]      # 座高11.5cm–底座长21cm
+  自喷漆罐: [0.023, 0.101]    # 筒径6.6cm–罐高22cm
+  杀虫剂罐: [0.023, 0.138]    # 筒径6.6cm–罐高30cm
+  减震器: [0.018, 0.183]      # 筒径5cm–长40cm
+  千斤顶: [0.028, 0.105]      # 瓶体直径8cm–最低高度23cm
+  气缸: [0.028, 0.183]        # 缸径8cm–长40cm
+  灭火器: [0.053, 0.238]      # 筒径15cm–筒高52cm
+  分离过滤器: [0.089, 0.298]  # 筒径25cm–高65cm
+  油缸: [0.043, 0.504]        # 缸径12cm–含杆110cm
+  液压缸: [0.035, 0.321]      # 缸径10cm–长70cm
+  球阀: [0.177, 0.252]        # 法兰外径50cm–面对面55cm
+  气瓶: [0.081, 0.298]        # 筒径23cm–可见段65cm
+  储罐: [0.177, 0.344]        # 筒径50cm–可见段75cm
+
+# 真实件结构尺寸，单位厘米。提示词和 VLM 都用这些厘米，不把它们再缩小
+# height_cm 是参照长度，diameter_cm 是主横截面。车斗水平视野按 240 厘米换算画面比例
+object_size_briefs:
+  密封胶罐:
+    height_cm: 9.5
+    diameter_cm: 7.0
+    cross_name: 瓶身直径
+    expose: 只露出瓶身或瓶盖一小段
+    forbid: 不要画成储罐或灭火器
+    parts:
+      - {name: 瓶盖直径, cm: 6.5}
+  集油器:
+    height_cm: 16
+    diameter_cm: 9
+    cross_name: 杯径
+    expose: 只露出杯体中段或底部阀
+    forbid: 不要画成储罐
+    parts:
+      - {name: 底部放水阀直径, cm: 2}
+      - {name: 放水阀长, cm: 3}
+  轴承座:
+    height_cm: 21
+    diameter_cm: 5
+    cross_name: 轴孔直径
+    expose: 只露出座体一角或一个安装脚
+    forbid: 不要画成螺母或完整底座特写
+    parts:
+      - {name: 底座长, cm: 21}
+      - {name: 座高, cm: 11.5}
+      - {name: 底座宽, cm: 6}
+  自喷漆罐:
+    height_cm: 22
+    diameter_cm: 6.6
+    cross_name: 筒径
+    expose: 只露出罐体中段或喷嘴盖
+    forbid: 不要画成灭火器
+    parts:
+      - {name: 喷嘴盖直径, cm: 3.2}
+  杀虫剂罐:
+    height_cm: 30
+    diameter_cm: 6.6
+    cross_name: 筒径
+    expose: 只露出罐体中段或喷嘴
+    forbid: 不要画成灭火器
+    parts:
+      - {name: 喷嘴盖直径, cm: 3.5}
+  减震器:
+    height_cm: 40
+    diameter_cm: 5
+    cross_name: 筒径
+    expose: 只露出筒体中段或一端耳环
+    forbid: 不要画成螺栓或短销
+    parts:
+      - {name: 耳环孔径, cm: 1.4}
+      - {name: 耳环外径, cm: 3.5}
+  千斤顶:
+    height_cm: 23
+    diameter_cm: 8
+    cross_name: 瓶体直径
+    expose: 只露出瓶体中段或底座边缘
+    forbid: 不要画成完整升起的千斤顶特写
+    parts:
+      - {name: 底座直径, cm: 12}
+      - {name: 最低高度, cm: 23}
+  气缸:
+    height_cm: 40
+    diameter_cm: 8
+    cross_name: 缸筒直径
+    expose: 只露出缸筒中段或活塞杆一小截
+    forbid: 不要缩成短套筒，也不要画完整拉杆缸
+    parts:
+      - {name: 活塞杆直径, cm: 2.5}
+      - {name: 杆端螺纹长, cm: 3}
+  灭火器:
+    height_cm: 52
+    diameter_cm: 15
+    cross_name: 筒径
+    expose: 只露出瓶身中段或握把附近，不要整只红瓶立在堆上
+    forbid: 不要画成喷雾罐或完整灭火器特写
+    parts:
+      - {name: 握把宽, cm: 12}
+      - {name: 喷管长, cm: 15}
+  分离过滤器:
+    height_cm: 65
+    diameter_cm: 25
+    cross_name: 筒径
+    expose: 只露出筒壁或侧向法兰一小段
+    forbid: 不要画成小滤芯或完整旋风罐
+    parts:
+      - {name: 侧向法兰外径, cm: 12}
+      - {name: 接管外径, cm: 8}
+  油缸:
+    height_cm: 110
+    diameter_cm: 12
+    cross_name: 缸筒直径
+    expose: 只露出缸筒或镀铬杆一小段
+    forbid: 不要画成短钢套或完整油缸特写
+    parts:
+      - {name: 活塞杆直径, cm: 5}
+      - {name: 耳环外径, cm: 8}
+      - {name: 耳环孔径, cm: 4}
+  液压缸:
+    height_cm: 70
+    diameter_cm: 10
+    cross_name: 缸筒直径
+    expose: 只露出缸筒中段或杆端耳环
+    forbid: 不要缩成短瓶或画完整液压缸
+    parts:
+      - {name: 活塞杆直径, cm: 4}
+      - {name: 耳环外径, cm: 7}
+      - {name: 耳环孔径, cm: 3.5}
+  球阀:
+    height_cm: 55
+    diameter_cm: 50
+    cross_name: 法兰外径
+    expose: 只露出阀体或一片法兰
+    forbid: 不要画成小管件或完整阀门特写
+    parts:
+      - {name: 通径, cm: 35}
+      - {name: 面对面长度, cm: 55}
+      - {name: 手轮直径, cm: 40}
+  气瓶:
+    height_cm: 65
+    diameter_cm: 23
+    cross_name: 筒径
+    expose: 只露出比灭火器略长的瓶身一小段，不要画完整钢瓶
+    forbid: 不要画成喷雾罐或完整气瓶特写
+    parts:
+      - {name: 瓶肩直径, cm: 14}
+      - {name: 瓶阀高, cm: 8}
+  储罐:
+    height_cm: 75
+    diameter_cm: 50
+    cross_name: 筒径
+    expose: 只露出筒壁、封头或一条支腿
+    forbid: 不要缩成药瓶，也不要画完整储罐
+    parts:
+      - {name: 封头高, cm: 15}
+      - {name: 支腿高, cm: 20}
+      - {name: 人孔直径, cm: 12}
 object_canvas_scale: 1.0
 object_opacity: 0.5
 object_anchor: "center"
 
+# 生图时把同类实拍/六视图格子作为外形参考，背景图仍是唯一画布
+# 参考图禁止当贴图素材；没有六视图时用 input/objects 里同一类的多张实拍
+feed_object_views: true
+max_object_views: 3
+six_views_dir: "output/six_views"
+
 # VLM优化配置
 enable_vlm_optimization: true
 max_optimization_rounds: 3
-size_tolerance: "very_small"
+# 尺寸判定以真实厘米为准：可见最长边应落在真实横截面到真实参照长度之间
+size_tolerance: "actual_cm"
 
 # 目录配置
 backgrounds_dir: "input/backgrounds"

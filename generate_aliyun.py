@@ -26,7 +26,7 @@ from urllib.parse import urlparse
 
 import requests
 import yaml
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageFilter
 import urllib3
 
 # ============ 强制禁用SSL验证 ============
@@ -198,6 +198,7 @@ class AppConfig:
     
     object_resize_scale: float
     object_resize_scales: Dict[str, Tuple[float, float]]
+    object_size_briefs: Dict[str, Dict[str, Any]]
     object_canvas_scale: float
     object_opacity: float
     object_anchor: str
@@ -218,27 +219,81 @@ class AppConfig:
     vlm_model: str
     enable_vlm_optimization: bool = True
     max_optimization_rounds: int = 3
-    size_tolerance: str = "very_small"
+    size_tolerance: str = "class_range"
+    feed_object_views: bool = True
+    max_object_views: int = 3
+    six_views_dir: Optional[Path] = None
     
     vlm_evaluator_prompt: str = field(default_factory=lambda: (
-        "请仔细分析这张合成图片，判断其中添加的异物尺寸是否符合该类别的真实大小。\n"
-        "判定标准：\n"
-        "1. 对照提示中的目标可见宽度（占画面宽度的百分比），明显大于该范围则判定为'太大'\n"
-        "2. 异物相对同类真实物体过小、或几乎看不见则判定为'太小'\n"
-        "3. 气瓶、储罐、DN350阀门等本来就比钢板条更长，只要没变成画面主体，不应只因为能被看见就判太大\n"
-        "4. 密封胶罐、自喷漆罐等小件如果画得像灭火器一样大，判定为'太大'\n"
-        "5. 尺寸落在目标范围内、大部分被废钢遮挡但仍可辨认，判定为'合格'\n"
-        "6. 异物是否出现能识别一部分的文字、字母、数字或标识？如果是，则判定为文字需要模糊化\n"
-        "7. 异物是否有人工摆放的痕迹或不自然的姿态？如果是，则判定为需要调整姿态\n"
-        "请以JSON格式输出：{\"size_judgment\": \"too_large|acceptable|too_small\", "
-        "\"reason\": \"判断理由\", \"improvement_suggestion\": \"如果需要调整大小，如何修改Prompt？如果文字需要模糊化，如何修改Prompt？如果需要调整姿态，如何修改Prompt？\", "
-        "\"confidence\": 0.0-1.0, "
-        "\"quality_score\": 0.0-1.0, "
+        "你是废钢车斗异物质检员。只输出有效JSON。车斗水平视野约240厘米。\n"
+        "先估计可见最长边占画面宽度的 visible_ratio，再换成厘米：visible_cm = visible_ratio × 240。\n"
+        "尺寸以该类真实厘米为准，包括参照长度、筒径或主横截面，以及握把、喷管、活塞杆、耳环、法兰等结构。\n"
+        "不要把真实厘米再缩小成模型。遮挡可以挡住一部分，但露出部分必须仍是真实尺度。\n"
+        "太大：可见最长边的厘米明显大于真实参照长度，或画得比真实件更大。\n"
+        "太小：没放进去，或露出部分明显小于真实横截面，像缩小的玩具。\n"
+        "合格：露出部分落在真实横截面到真实参照长度之间，结构比例符合真实直径/高度。\n"
+        "看不见全长是埋入，不要因此判太小；能看见也不要因此判太大。\n"
+        "小件如果画得达到更大类别的真实尺寸，判定为太大。\n"
+        "文字只要求模糊异物标签；禁止建议柔化整张图或降低分辨率。\n"
+        "sharpness 只记整图是否发糊（sharp|ok|soft），不要靠缩小异物来修清晰度。\n"
+        "另给三项 0 到 100 的整数分：tone_score 色调，size_score 大小，overall_score 整体效果。\n"
+        "三项都高于 85 才算这轮合格。每项给一句修正：tone_fix、size_fix、overall_fix。\n"
+        "输出JSON：{\"visible_ratio\": 0.0, \"size_judgment\": \"too_large|acceptable|too_small\", "
+        "\"tone_score\": 0, \"size_score\": 0, \"overall_score\": 0, "
+        "\"tone_fix\": \"\", \"size_fix\": \"\", \"overall_fix\": \"\", "
+        "\"sharpness\": \"sharp|ok|soft\", \"confidence\": 0.0, \"reason\": \"\", "
+        "\"improvement_suggestion\": \"\", \"quality_score\": 0.0, "
         "\"fusion_quality\": \"very bad|bad|ok|good|very good\"}"
     ))
 
 
 # ============ 尺寸计算工具 ============
+
+# 废钢车斗水平视野约 2.4 m，用于把宽度百分比换成厘米
+HOPPER_FOV_M = 2.4
+
+
+def image_sharpness_score(path: Path) -> float:
+    """Laplacian 方差，数值越高越锐。用于发现后轮二次渲染发糊。"""
+    img = Image.open(path).convert("L")
+    img = img.resize(
+        (max(1, img.width // 4), max(1, img.height // 4)),
+        Image.Resampling.BOX,
+    )
+    edge = img.filter(ImageFilter.Kernel((3, 3), [0, 1, 0, 1, -4, 1, 0, 1, 0], scale=1, offset=0))
+    pix = list(edge.getdata())
+    if not pix:
+        return 0.0
+    mean = sum(pix) / len(pix)
+    return sum((p - mean) ** 2 for p in pix) / len(pix)
+
+
+_WHOLE_IMAGE_BLUR_HINTS = (
+    "柔化整", "整张图模糊", "整图模糊", "降低清晰", "降清晰",
+    "降低分辨率", "降分辨率", "降低锐度", "二次渲染", "把画面弄糊",
+)
+
+
+def sanitize_vlm_suggestion(text: str) -> str:
+    """去掉让整张图发糊的建议，标签文字模糊可以保留。"""
+    if not text:
+        return ""
+    parts = re.split(r"[。；;\n]+", str(text))
+    kept = []
+    for part in parts:
+        piece = part.strip()
+        if not piece:
+            continue
+        if "标签" in piece or "字迹" in piece or "文字" in piece:
+            kept.append(piece)
+            continue
+        if any(hint in piece for hint in _WHOLE_IMAGE_BLUR_HINTS):
+            continue
+        kept.append(piece)
+    return "。".join(kept).strip()
+
+
+
 
 OBJECT_SCALE_ALIASES = {
     "fire_extinguisher": "灭火器",
@@ -286,10 +341,35 @@ def parse_object_resize_scales(raw: Dict[str, Any]) -> Dict[str, Tuple[float, fl
     return parsed
 
 
+def actual_scale_range_from_brief(brief: Dict[str, Any]) -> Tuple[float, float]:
+    """真实横截面到真实参照长度，换成占 240 厘米车斗视野的比例。"""
+    fov_cm = HOPPER_FOV_M * 100.0
+    length_cm = float(brief["height_cm"])
+    cross_cm = float(brief["diameter_cm"])
+    if "轴孔" in str(brief.get("cross_name") or "") or "孔径" in str(brief.get("cross_name") or ""):
+        outers = [
+            float(part["cm"]) for part in brief.get("parts") or []
+            if "孔" not in str(part.get("name") or "")
+        ]
+        if outers:
+            ordered = sorted(outers)
+            cross_cm = ordered[len(ordered) // 2]
+    low_cm = min(length_cm, cross_cm)
+    high_cm = max(length_cm, cross_cm)
+    low = max(0.008, low_cm / fov_cm * 0.85)
+    high = min(0.95, high_cm / fov_cm * 1.10)
+    if low > high:
+        low, high = high, low
+    return (low, high)
+
+
 def object_scale_range(cfg: AppConfig, object_class: Optional[str] = None) -> Tuple[float, float]:
     fallback = (cfg.object_resize_scale, cfg.object_resize_scale)
     if not object_class:
         return fallback
+    brief = lookup_size_brief(cfg, object_class)
+    if brief:
+        return actual_scale_range_from_brief(brief)
     scales = cfg.object_resize_scales or {}
     if object_class in scales:
         return scales[object_class]
@@ -305,6 +385,197 @@ def object_scale_range(cfg: AppConfig, object_class: Optional[str] = None) -> Tu
 def sample_object_resize_scale(cfg: AppConfig, object_class: Optional[str] = None) -> float:
     low, high = object_scale_range(cfg, object_class)
     return random.uniform(low, high) if high > low else low
+
+
+def parse_object_size_briefs(raw: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
+    """读取每类真实高度、主横截面尺寸和其余结构尺寸。"""
+    data = raw.get("object_size_briefs") or {}
+    if not isinstance(data, dict):
+        raise ValueError("object_size_briefs 必须是按物体类别分组的字典")
+    parsed: Dict[str, Dict[str, Any]] = {}
+    for key, value in data.items():
+        name = str(key).strip()
+        if not name or not isinstance(value, dict):
+            raise ValueError(f"物体 {name or key} 的尺寸说明格式无效")
+        height_cm = float(value.get("height_cm") or 0)
+        diameter_cm = float(value.get("diameter_cm") or 0)
+        if height_cm <= 0 or diameter_cm <= 0:
+            raise ValueError(f"物体 {name} 需要正的 height_cm 和 diameter_cm")
+        parts = []
+        for part in value.get("parts") or []:
+            if not isinstance(part, dict):
+                continue
+            part_name = str(part.get("name") or "").strip()
+            part_cm = float(part.get("cm") or 0)
+            if part_name and part_cm > 0:
+                parts.append({"name": part_name, "cm": part_cm})
+        parsed[name] = {
+            "height_cm": height_cm,
+            "diameter_cm": diameter_cm,
+            "cross_name": str(value.get("cross_name") or "筒径").strip(),
+            "expose": str(value.get("expose") or "").strip(),
+            "forbid": str(value.get("forbid") or "").strip(),
+            "parts": parts,
+        }
+    return parsed
+
+
+def lookup_size_brief(cfg: Optional[AppConfig], object_class: Optional[str]) -> Optional[Dict[str, Any]]:
+    if cfg is None or not object_class:
+        return None
+    briefs = cfg.object_size_briefs or {}
+    if object_class in briefs:
+        return briefs[object_class]
+    canonical = OBJECT_SCALE_ALIASES.get(object_class)
+    if canonical and canonical in briefs:
+        return briefs[canonical]
+    for name, brief in briefs.items():
+        if name and (name in object_class or object_class in name):
+            return brief
+    return None
+
+
+def round_size_spec(
+    cfg: Optional[AppConfig],
+    object_class: Optional[str],
+    target_ratio: Optional[float] = None,
+) -> Dict[str, Any]:
+    """本轮设定尺寸。结构用真实厘米，可见边只换算这一轮在 240 厘米视野里的长度。"""
+    name = object_class or "异物"
+    low, high = object_scale_range(cfg, object_class) if cfg is not None else (0.06, 0.06)
+    ratio = target_ratio if target_ratio is not None else (low + high) / 2
+    ratio = min(max(float(ratio), low * 0.85), high * 1.05)
+    target_cm = ratio * HOPPER_FOV_M * 100.0
+    fov_cm = HOPPER_FOV_M * 100.0
+    brief = lookup_size_brief(cfg, object_class)
+    if brief is None:
+        text = (
+            f"【本轮设定尺寸】{name}按真实物体绘制，不要画成玩具。"
+            f"本轮埋入后可见最长边约{target_cm:.0f}厘米，约占画面宽度的{ratio:.1%}。"
+            f"车斗水平视野约{fov_cm:.0f}厘米。"
+        )
+        return {
+            "object_class": name,
+            "target_ratio": ratio,
+            "target_cm": target_cm,
+            "diameter_cm": None,
+            "diameter_to_height": None,
+            "cross_name": "筒径",
+            "scale_min": low,
+            "scale_max": high,
+            "size_brief": text,
+            "real_height_cm": None,
+        }
+    real_h = brief["height_cm"]
+    real_d = brief["diameter_cm"]
+    d_to_h = real_d / real_h
+    part_bits = [f"{part['name']}{part['cm']:.0f}厘米" for part in brief["parts"]]
+    parts_text = ("，" + "，".join(part_bits)) if part_bits else ""
+    expose = brief["expose"] or "可以埋入废钢，只露出一段"
+    forbid = brief["forbid"] or "不要画得比真实件更大，也不要缩成玩具"
+    text = (
+        f"【本轮设定尺寸】{name}按真实件尺寸绘制，不要把筒径和结构缩成模型。"
+        f"参照长度{real_h:.0f}厘米，{brief['cross_name']}{real_d:.0f}厘米，直径/高度={d_to_h:.2f}"
+        f"{parts_text}。"
+        f"车斗水平视野约{fov_cm:.0f}厘米。"
+        f"本轮埋入后可见最长边约{target_cm:.0f}厘米，约占画面宽度的{ratio:.1%}。"
+        f"筒径和其余结构保持上面的真实厘米，不要按可见边再缩小。"
+        f"{expose}。{forbid}。可见最长边不要明显超过参照长度{real_h:.0f}厘米。"
+    )
+    return {
+        "object_class": name,
+        "target_ratio": ratio,
+        "target_cm": target_cm,
+        "diameter_cm": real_d,
+        "diameter_to_height": d_to_h,
+        "cross_name": brief["cross_name"],
+        "scale_min": low,
+        "scale_max": high,
+        "size_brief": text,
+        "real_height_cm": real_h,
+        "real_diameter_cm": real_d,
+        "parts": [{"name": part["name"], "cm": part["cm"]} for part in brief["parts"]],
+        "expose": expose,
+        "forbid": forbid,
+    }
+
+
+def class_size_clause(
+    cfg: Optional[AppConfig],
+    object_class: Optional[str] = None,
+    target_ratio: Optional[float] = None,
+) -> str:
+    return round_size_spec(cfg, object_class, target_ratio)["size_brief"]
+
+
+_HISTORY_WORDS = ("上一轮", "测得", "历程", "返回尺寸", "前几轮", "前两轮", "第1轮", "第2轮", "第3轮")
+
+
+def keep_only_current_size(text: str, spec: Dict[str, Any]) -> str:
+    """生图提示词只留本轮设定。删掉往轮设定和返回尺寸。"""
+    current_pct = f"{spec['target_ratio']:.1%}"
+    pieces = re.split(r"(?<=[。！？\n])", text or "")
+    kept = []
+    for piece in pieces:
+        if any(word in piece for word in _HISTORY_WORDS):
+            continue
+        percents = re.findall(r"\d+(?:\.\d+)?%", piece)
+        if any(item != current_pct for item in percents):
+            continue
+        kept.append(piece)
+    body = "".join(kept).strip()
+    brief = spec["size_brief"]
+    if brief not in body:
+        body = f"{body}\n{brief}".strip() if body else brief
+    return body
+
+
+def format_size_history(size_rounds: List[Dict[str, Any]]) -> str:
+    """只给 VLM。每一轮的设定尺寸和返回尺寸。"""
+    if not size_rounds:
+        return "【尺寸历程】尚无已完成轮次。"
+    lines = ["【尺寸历程】"]
+    for item in size_rounds:
+        set_pct = item.get("target_ratio")
+        set_cm = item.get("target_cm")
+        cross = item.get("cross_name") or "筒径"
+        diameter = item.get("diameter_cm")
+        visible = item.get("visible_ratio")
+        visible_cm = item.get("visible_cm")
+        judgment = item.get("size_judgment") or "未知"
+        set_txt = f"{set_pct:.1%}（约{set_cm:.0f}厘米）" if isinstance(set_pct, float) else "未知"
+        dia_txt = f"，{cross}约{diameter:.1f}厘米" if isinstance(diameter, float) else ""
+        if isinstance(visible, float):
+            back_cm = f"，约{visible_cm:.0f}厘米" if isinstance(visible_cm, float) else ""
+            back_txt = f"返回可见最长边{visible:.1%}{back_cm}"
+        else:
+            back_txt = "返回尺寸未知"
+        lines.append(
+            f"第{item.get('round')}轮设定可见最长边{set_txt}{dia_txt}；{back_txt}；判定{judgment}。"
+        )
+    return "\n".join(lines)
+
+
+def compute_next_target_ratio(spec: Dict[str, Any], evaluation: Dict[str, Any]) -> float:
+    """按本轮设定和画面返回的可见比例计算下一轮设定。径高比不变，筒径随可见边同比变化。"""
+    current = float(spec["target_ratio"])
+    low = float(spec["scale_min"])
+    high = float(spec["scale_max"])
+    judgment = evaluation.get("size_judgment")
+    measured = evaluation.get("visible_ratio")
+    measured_f = float(measured) if isinstance(measured, (int, float)) and measured is not None else None
+    if judgment == "too_large" and measured_f and measured_f > current > 0:
+        nxt = current * (current / measured_f)
+        return min(max(nxt, low * 0.88), current)
+    if judgment == "too_small":
+        if measured_f and measured_f > 0:
+            nxt = min(high, max(current * 1.2, measured_f * 1.35))
+        else:
+            nxt = min(high * 1.12, current * 1.25)
+        return min(high * 1.12, max(nxt, current))
+    if judgment == "too_large":
+        return max(low * 0.88, current * 0.75)
+    return min(max(current, low), high)
 
 
 def calculate_optimal_size(
@@ -336,8 +607,8 @@ def calculate_optimal_size(
         "scale_max": scale_max,
         "object_class": object_class,
         "description": (
-            f"{object_class or '异物'}可见最长边约 {target_width} 像素"
-            f"（画面宽度的{target_ratio*100:.1f}%，配置 {scale_min*100:.1f}–{scale_max*100:.1f}%）"
+            f"{object_class or '异物'}可见最长边约占画面宽度的{target_ratio*100:.1f}%"
+            f"（约{target_ratio * HOPPER_FOV_M * 100:.0f}厘米，配置 {scale_min*100:.1f}–{scale_max*100:.1f}%）"
         ),
     }
 
@@ -373,7 +644,7 @@ class PromptEnhancer:
             "被废钢层层覆盖，仅露出微小边缘",
             "被上方的废钢件压住，大部分被遮挡",
             "嵌在废钢缝隙中，周围被废钢包围",
-            "被周围的废钢挤压，只露出极小部分",
+            "被周围的废钢挤压，仍露出能辨认的一段",
             "藏在废钢堆深处，被多层废钢遮挡",
             "被一块较大的废钢板遮挡了大半",
             "塞在废钢件的夹缝里，只露出一角",
@@ -768,55 +1039,114 @@ def sample_foreign_object_position(geometry: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-HORIZONTAL_ANGLE_RANGE = 90.0
-HORIZONTAL_ANGLE_SIGMA = 12.0
+CYLINDER_CLASSES = {
+    "灭火器", "气瓶", "杀虫剂罐", "自喷漆罐", "密封胶罐", "集油器",
+    "气缸", "油缸", "液压缸", "减震器", "千斤顶", "分离过滤器", "储罐",
+}
+SCORE_AXES = ("tone_score", "size_score", "overall_score")
+PASS_SCORE = 85.0
 
 
-def _sample_small_tilt_deg() -> float:
-    """尖峰正态，裁到 [-90, 90]，作为大朝向之后的小角度。"""
-    angle = random.gauss(0.0, HORIZONTAL_ANGLE_SIGMA)
-    for _ in range(16):
-        if -HORIZONTAL_ANGLE_RANGE <= angle <= HORIZONTAL_ANGLE_RANGE:
-            return angle
-        angle = random.gauss(0.0, HORIZONTAL_ANGLE_SIGMA)
-    return max(-HORIZONTAL_ANGLE_RANGE, min(HORIZONTAL_ANGLE_RANGE, angle))
+def is_cylinder_class(object_class: Optional[str]) -> bool:
+    if not object_class:
+        return False
+    name = OBJECT_SCALE_ALIASES.get(object_class, object_class)
+    return name in CYLINDER_CLASSES or object_class in CYLINDER_CLASSES
+
+
+def _score100(value: Any) -> float:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return 0.0
+    if 0 < number <= 1:
+        number *= 100.0
+    return max(0.0, min(100.0, number))
+
+
+def score_triplet(evaluation: Dict[str, Any]) -> Dict[str, float]:
+    return {key: _score100(evaluation.get(key)) for key in SCORE_AXES}
+
+
+def average_score(evaluation: Dict[str, Any]) -> float:
+    scores = score_triplet(evaluation)
+    return sum(scores.values()) / len(SCORE_AXES)
+
+
+def scores_pass(evaluation: Dict[str, Any]) -> bool:
+    return all(score > PASS_SCORE for score in score_triplet(evaluation).values())
+
+
+def sample_object_pose(object_class: Optional[str] = None) -> Dict[str, Any]:
+    """圆柱偏向斜插或躺在坡底；非圆柱水平插入多于斜插，竖直最少。斜插相对水平线 0°–30°。"""
+    cylinder = is_cylinder_class(object_class)
+    facing_right = random.random() < 0.5
+    facing = "right" if facing_right else "left"
+    facing_cn = "朝右" if facing_right else "朝左"
+    sign = 1.0 if facing_right else -1.0
+    if cylinder:
+        mode = random.choices(
+            ["diagonal_insert", "under_slope", "on_crest"],
+            weights=[0.45, 0.40, 0.15],
+        )[0]
+        shape_cn = "圆柱"
+    else:
+        mode = random.choices(
+            ["horizontal_insert", "diagonal_insert", "vertical_insert"],
+            weights=[0.50, 0.35, 0.15],
+        )[0]
+        shape_cn = "非圆柱"
+    if mode == "diagonal_insert":
+        tilt = random.uniform(0.0, 30.0)
+        pose_cn = "斜插入废钢内部"
+        placement = (
+            f"长轴相对水平线倾斜{tilt:.1f}度，必须落在0度到30度之间，{facing_cn}斜插入废钢堆内部。"
+            "不要平放在堆顶表面，不要竖直立着。"
+        )
+    elif mode == "vertical_insert":
+        tilt = random.uniform(82.0, 90.0)
+        pose_cn = "静止竖直插入"
+        placement = (
+            f"长轴相对水平线约{tilt:.1f}度，接近垂直，静止竖直插入废钢堆内部，不要平躺在表面。"
+        )
+    elif mode == "under_slope":
+        tilt = random.uniform(0.0, 8.0)
+        pose_cn = "平躺在废钢坡低处"
+        placement = (
+            f"长轴相对水平线仅倾斜{tilt:.1f}度，平躺在废钢坡的低处，像从高处滚落后停在坡底。"
+            "不要放在堆顶高出的表面上，不要悬浮。"
+        )
+    elif mode == "on_crest":
+        tilt = random.uniform(0.0, 8.0)
+        pose_cn = "平放在堆顶"
+        placement = (
+            f"长轴相对水平线仅倾斜{tilt:.1f}度，平放在废钢堆高出的表面。不要悬浮。"
+        )
+    else:
+        tilt = random.uniform(0.0, 8.0)
+        pose_cn = "水平插入废钢内部"
+        placement = (
+            f"长轴相对水平线仅倾斜{tilt:.1f}度，水平插入废钢堆内部，不要立在表面，不要悬浮。"
+        )
+    signed = sign * tilt
+    description = f"{shape_cn}{pose_cn}，整体{facing_cn}。{placement}"
+    return {
+        "cylinder": cylinder,
+        "pose": mode,
+        "pose_cn": pose_cn,
+        "facing": facing,
+        "facing_cn": facing_cn,
+        "tilt_from_horizontal_deg": round(signed, 2),
+        "base_angle_deg": 0.0 if mode != "vertical_insert" else 90.0,
+        "small_angle_deg": round(signed, 2),
+        "final_angle_deg": round(signed, 2),
+        "description": description,
+    }
 
 
 def sample_horizontal_orientation() -> Dict[str, Any]:
-    """
-    横放：先 0.5 概率朝左/朝右，对应逆时针/顺时针旋转 90 度，
-    再叠加 [-90, 90] 上的尖峰正态小角度，让长边接近水平。
-    """
-    facing_right = random.random() < 0.5
-    if facing_right:
-        facing = "right"
-        facing_cn = "朝右"
-        rotation_dir = "clockwise"
-        rotation_dir_cn = "顺时针"
-        base_angle = 90.0
-    else:
-        facing = "left"
-        facing_cn = "朝左"
-        rotation_dir = "counterclockwise"
-        rotation_dir_cn = "逆时针"
-        base_angle = -90.0
-    small_angle = _sample_small_tilt_deg()
-    final_angle = base_angle + small_angle
-    description = (
-        f"异物必须横放，长边接近水平，整体{facing_cn}；"
-        f"在{rotation_dir_cn}旋转90度之后，再相对水平微调{small_angle:+.1f}度。"
-        f"不要竖着放，长轴不要接近垂直"
-    )
-    return {
-        "facing": facing,
-        "facing_cn": facing_cn,
-        "rotation_dir": rotation_dir,
-        "base_angle_deg": base_angle,
-        "small_angle_deg": round(small_angle, 2),
-        "final_angle_deg": round(final_angle, 2),
-        "sigma_deg": HORIZONTAL_ANGLE_SIGMA,
-        "description": description,
-    }
+    """兼容旧调用：按非圆柱抽样。"""
+    return sample_object_pose(None)
 
 
 # ============ 物体图片加载器 ============
@@ -927,6 +1257,45 @@ def choose_weighted_object(object_items: List[Dict[str, Any]]) -> Dict[str, Any]
             return item
     
     return object_items[-1]
+
+
+def collect_object_views(
+    object_path: Path,
+    object_class: str,
+    object_items: List[Dict[str, Any]],
+    max_views: int,
+    six_views_dir: Optional[Path] = None,
+) -> List[Path]:
+    """同类实拍和已有六视图格子，只作外形参考，不作为贴图素材。"""
+    views: List[Path] = []
+    seen = set()
+
+    def add(path: Optional[Path]) -> None:
+        if path is None or not path.is_file():
+            return
+        key = path.resolve()
+        if key in seen:
+            return
+        seen.add(key)
+        views.append(path)
+
+    if six_views_dir and six_views_dir.exists():
+        needles = [object_path.stem.lower(), object_class.lower()]
+        for img in sorted(six_views_dir.rglob("*")):
+            if not (img.is_file() and img.suffix.lower() in IMAGE_EXTS):
+                continue
+            blob = f"{img.parent.name} {img.stem}".lower()
+            if any(n and n in blob for n in needles):
+                add(img)
+
+    add(object_path)
+    for item in object_items:
+        if item.get("class") == object_class:
+            add(item.get("path"))
+
+    if max_views <= 0:
+        return []
+    return views[:max_views]
 
 
 # ============ VLM分析器类 ============
@@ -1107,10 +1476,18 @@ class VLMAnalyzer:
         """返回默认评估结果（当 VLM 调用失败时）"""
         return {
             "size_judgment": "acceptable",
+            "visible_ratio": None,
+            "tone_score": 0,
+            "size_score": 0,
+            "overall_score": 0,
+            "tone_fix": "",
+            "size_fix": "",
+            "overall_fix": "",
+            "sharpness": "ok",
             "confidence": 0.5,
             "reason": "VLM 调用失败，使用默认评估",
             "improvement_suggestion": "",
-            "should_retry": False,
+            "should_retry": True,
             "quality_score": 0.5,
             "fusion_quality": "ok"
         }
@@ -1161,58 +1538,112 @@ class VLMAnalyzer:
             continue_session=True,
         )
     
+    def compose_generation_prompt(
+        self,
+        background_path: Path,
+        object_class: str,
+        spec: Dict[str, Any],
+        size_history: str,
+        position_hint: str,
+        orientation_hint: str,
+        scene_hint: str,
+        score_notes: str = "",
+    ) -> str:
+        """VLM 看全程设定/返回尺寸后写提示词。返回值只含本轮设定尺寸。"""
+        user_prompt = (
+            f"类别：{object_class}\n"
+            f"{spec['size_brief']}\n"
+            f"{size_history}\n"
+            f"位置：{position_hint}\n"
+            f"朝向：{orientation_hint}\n"
+            f"{score_notes}\n"
+            f"场景参考，不要照抄里面的旧尺寸数字：{scene_hint}\n\n"
+            "请写一条交给生图模型的中文 generation_prompt。\n"
+            "生图模型只能看到这条提示词，看不到尺寸历程。\n"
+            "生图模型除背景画布外还会看到该类多视角参考图，generation_prompt 必须写明：参考图只认外形、颜色和零件，禁止抠图、贴图、插入或原样拷贝进废钢场景。\n"
+            "结构尺寸必须使用【本轮设定尺寸】里的真实厘米和直径/高度，不要把筒径、握把、杆径缩成几厘米的模型。\n"
+            "本轮可见最长边的厘米和百分比也不要改。\n"
+            "不要写上一轮、测得、历程、返回尺寸、得分，也不要写更早轮次的百分比。\n"
+            "若给出了色调、大小、整体三项修正，把它们写成这一轮的画面要求，不要写分数。\n"
+            "只输出JSON：{\"generation_prompt\":\"...\"}"
+        )
+        raw = self._call_vlm(
+            system_prompt=(
+                "你是废钢异物生图提示词编辑。只输出有效JSON。"
+                "你可以阅读尺寸历程来决定措辞，但 generation_prompt 里只能出现本轮设定尺寸。"
+                "必须交代多视图只是外形参考，禁止把参考图里的物体直接插入场景。"
+            ),
+            user_prompt=user_prompt,
+            images=[] if self.vlm_messages else [background_path],
+            expect_json=True,
+            continue_session=True,
+        )
+        text = ""
+        if isinstance(raw, dict):
+            text = str(raw.get("generation_prompt") or "")
+        if not text.strip():
+            text = spec["size_brief"]
+        cleaned = keep_only_current_size(text, spec)
+        print(f"  [VLM] 本轮生图尺寸: {spec['size_brief']}")
+        return cleaned
+
     def evaluate_generated_image(
         self,
         generated_image_path: Path,
         object_class: str,
         original_prompt: str,
         target_ratio: Optional[float] = None,
+        size_spec: Optional[Dict[str, Any]] = None,
+        size_rounds: Optional[List[Dict[str, Any]]] = None,
     ) -> Dict[str, Any]:
         """
-        VLM 评估生成的图片 - 自动压缩图片避免 413 错误
+        VLM 评估生成的图片。长边约 1280，便于看 3% 级可见段和整图锐度。
         """
-        from PIL import Image
         import io
-        
-        # 压缩图片
+
         try:
             img = Image.open(generated_image_path)
-            # 缩小到 768x768 以内（保持比例）
-            img.thumbnail((768, 768), Image.Resampling.LANCZOS)
+            img.thumbnail((1280, 1280), Image.Resampling.LANCZOS)
             buffer = io.BytesIO()
-            # 使用 JPEG 格式，质量 75%
-            img.convert("RGB").save(buffer, format="JPEG", quality=75)
+            img.convert("RGB").save(buffer, format="JPEG", quality=85)
             buffer.seek(0)
             b64_data = base64.b64encode(buffer.read()).decode("utf-8")
             compressed_data_url = f"data:image/jpeg;base64,{b64_data}"
-            print(f"  [VLM] 图片已压缩 (用于评估)")
+            print(f"  [VLM] 评估图已缩到长边≤1280 JPEG85")
         except Exception as e:
             print(f"  [VLM] 图片压缩失败: {e}，使用原始图片")
             compressed_data_url = image_to_data_url_vlm(generated_image_path)
 
-        scale_min, scale_max = object_scale_range(self.cfg, object_class)
-        ratio = target_ratio if target_ratio is not None else (scale_min + scale_max) / 2
+        spec = size_spec or round_size_spec(self.cfg, object_class, target_ratio)
+        history_text = format_size_history(size_rounds or [])
         user_prompt = (
-            f"请仔细分析这张合成图片。判断其中的{object_class}是否符合真实尺寸。\n"
-            f"该类别目标可见最长边约占画面宽度的{ratio:.1%}，允许范围{scale_min:.1%}–{scale_max:.1%}。\n"
-            f"评估标准：\n"
-            f"1. 明显大于允许范围，或被画成占据画面主体，判定为'太大'\n"
-            f"2. 明显小于允许范围，或几乎看不见、没放进去，判定为'太小'\n"
-            f"3. 落在允许范围内、大部分被废钢挡住但仍可辨认，判定为'合格'\n"
-            f"4. 气瓶、储罐、大型阀门本身就比小钢条长，不要只因为能看见就判太大\n"
-            f"5. 小件（密封胶罐、自喷漆罐等）如果画得像灭火器那么大，判定为'太大'\n"
-            f"6. 异物是否出现能识别一部分的文字、字母、数字或标识？如果是，则判定为文字需要模糊化\n"
-            f"7. 异物是否有人工摆放的痕迹或不自然的姿态？如果是，则判定为需要调整姿态\n"
-            f"输出JSON格式："
-            f"{{\"size_judgment\": \"too_large|acceptable|too_small\", "
-            f"\"confidence\": 0.0-1.0, "
-            f"\"reason\": \"判断理由\", "
-            f"\"improvement_suggestion\": \"修改建议\", "
-            f"\"should_retry\": true/false, "
-            f"\"quality_score\": 0.0-1.0, "
-            f"\"fusion_quality\": \"very bad|bad|ok|good|very good\"}}"
+            f"请评估这张合成图里的{object_class}。\n"
+            f"{spec['size_brief']}\n"
+            f"允许范围：{spec['scale_min']:.1%}–{spec['scale_max']:.1%}。\n"
+            f"{history_text}\n"
+            "尺寸以真实厘米为准。车斗水平视野约240厘米，visible_cm = visible_ratio × 240。\n"
+            "筒径、握把、喷管、活塞杆、法兰等必须对照上面的真实厘米，不要对照被缩小后的模型尺寸。\n"
+            "规则：\n"
+            "1. 先给出 visible_ratio（可见最长边/画面宽度，0到1的小数）。\n"
+            "2. 可见最长边的厘米明显大于真实参照长度，或整件比真实件更大 → too_large。\n"
+            "3. 没放进去，或露出部分明显小于真实横截面、像玩具 → too_small。\n"
+            "4. 露出部分落在真实横截面到真实参照长度之间，比例符合直径/高度 → acceptable。\n"
+            "5. 埋入导致看不见全长是正常的，不要因此判太小；能看见也不要因此判太大。\n"
+            "6. 小件如果达到更大类别的真实尺寸，例如喷雾罐画得像灭火器 → too_large。\n"
+            "7. 标签文字可建议模糊标签；禁止建议柔化整张图或降低分辨率。\n"
+            "8. sharpness 评估整张图是否发糊；发糊不要改 size_judgment。\n"
+            "9. quality_score 只打融合和清晰，不要因尺寸不合格就打到 0.3。\n"
+            "10. tone_score、size_score、overall_score 为 0 到 100 的整数。三项都高于 85 才算合格。\n"
+            "11. tone_fix、size_fix、overall_fix 各用一句话说明下一轮该怎么改色调、大小和整体埋入效果。\n"
+            "只输出JSON："
+            "{\"visible_ratio\": 0.0, \"size_judgment\": \"too_large|acceptable|too_small\", "
+            "\"tone_score\": 0, \"size_score\": 0, \"overall_score\": 0, "
+            "\"tone_fix\": \"\", \"size_fix\": \"\", \"overall_fix\": \"\", "
+            "\"sharpness\": \"sharp|ok|soft\", \"confidence\": 0.0, \"reason\": \"\", "
+            "\"improvement_suggestion\": \"\", \"quality_score\": 0.0, "
+            "\"fusion_quality\": \"very bad|bad|ok|good|very good\"}"
         )
-        
+
         eval_user_prompt = (
             "下面这张图是生图模型本轮的输出。请只根据这张生成图做评估，只输出JSON。\n\n"
             + user_prompt
@@ -1224,6 +1655,25 @@ class VLMAnalyzer:
             expect_json=True,
             continue_session=True,
         )
+        if not isinstance(response, dict):
+            response = self._get_default_evaluation()
+            response["reason"] = "VLM 返回非JSON，使用默认评估"
+        response["improvement_suggestion"] = sanitize_vlm_suggestion(
+            response.get("improvement_suggestion", "")
+        )
+        for axis in SCORE_AXES:
+            response[axis] = _score100(response.get(axis))
+        for fix_key in ("tone_fix", "size_fix", "overall_fix"):
+            response[fix_key] = sanitize_vlm_suggestion(response.get(fix_key, ""))
+        try:
+            visible = response.get("visible_ratio")
+            response["visible_ratio"] = float(visible) if visible is not None else None
+        except (TypeError, ValueError):
+            response["visible_ratio"] = None
+        sharpness_label = str(response.get("sharpness") or "ok").lower()
+        if sharpness_label not in {"sharp", "ok", "soft"}:
+            sharpness_label = "ok"
+        response["sharpness"] = sharpness_label
         return response
     
     def optimize_prompt(
@@ -1235,7 +1685,7 @@ class VLMAnalyzer:
         target_ratio: Optional[float] = None,
     ) -> Tuple[str, float]:
         judgment = evaluation_result.get("size_judgment", "acceptable")
-        suggestion = evaluation_result.get("improvement_suggestion", "")
+        suggestion = sanitize_vlm_suggestion(evaluation_result.get("improvement_suggestion", ""))
         
         lines = previous_prompt.split("\n")
         core_lines = [l for l in lines if not l.startswith("调整：") and not l.startswith("【尺寸约束】")]
@@ -1244,21 +1694,21 @@ class VLMAnalyzer:
         scale_min, scale_max = object_scale_range(self.cfg, object_class)
         current = target_ratio if target_ratio is not None else (scale_min + scale_max) / 2
         if judgment == "too_small":
-            new_ratio = min(scale_max * 1.12, current * random.uniform(1.15, 1.45))
+            new_ratio = min(scale_max, max(current * 1.25, scale_min * 1.1))
             fix = (
-                f"上一轮异物没有放进去或完全看不见。这一轮必须放入{object_class}，"
-                f"按该物体真实大小放到约画面宽度的{new_ratio:.2%}，并露出能辨认的一小段，不要再交回一张原背景"
+                f"按{object_class}的真实厘米放大到能看出横截面，不要再画成玩具。"
+                f"{class_size_clause(self.cfg, object_class, new_ratio)}"
             )
-            occlusion = "留出能辨认的一小段，不要完全埋进废钢里"
+            occlusion = "留出能辨认真实尺度的一段，不要完全埋进废钢里"
         elif judgment == "too_large":
-            new_ratio = max(scale_min * 0.88, current * random.uniform(0.70, 0.88))
+            new_ratio = max(scale_min, min(current, scale_max) * 0.85)
             fix = (
-                f"缩小到约画面宽度的{new_ratio:.2%}（仍保持{object_class}的真实相对大小），"
-                f"更深地嵌入废钢内部，大部分被遮挡"
+                f"可见最长边不要超过该件真实参照长度，结构厘米保持真实值，不要整件缩成模型。"
+                f"{class_size_clause(self.cfg, object_class, new_ratio)}"
             )
         else:
             new_ratio = min(max(current, scale_min), scale_max)
-            fix = f"保持{object_class}真实尺寸（约画面宽度的{new_ratio:.1%}），确保形态完整，边缘被遮挡"
+            fix = class_size_clause(self.cfg, object_class, new_ratio)
         
         positions = self.prompt_enhancer.get_position_descriptions("")
         if judgment != "too_small":
@@ -1300,8 +1750,9 @@ class VLMAnalyzer:
         last_image_path: Optional[Path] = None
         last_api_result: Optional[Dict[str, Any]] = None
         last_full_prompt = current_prompt
-        previous_path: Optional[Path] = None
         success = False
+        round_sharpness: List[float] = []
+        size_rounds: List[Dict[str, Any]] = []
 
         if size_state is None:
             size_state = {"ratio": sample_object_resize_scale(self.cfg, object_class)}
@@ -1318,7 +1769,7 @@ class VLMAnalyzer:
         self.optimization_history.append({"stage": "opening", "data": opening})
 
         position_sample = sample_foreign_object_position(geometry)
-        orientation_sample = sample_horizontal_orientation()
+        orientation_sample = sample_object_pose(object_class)
         position_hint = position_sample["description"]
         orientation_hint = orientation_sample["description"]
         print(
@@ -1327,16 +1778,17 @@ class VLMAnalyzer:
             f"p={position_sample['sampled_probability']:.3f} | {position_hint}"
         )
         print(
-            f"  [横放] {orientation_sample['facing_cn']} "
-            f"基准{orientation_sample['base_angle_deg']:+.0f}° "
-            f"微调{orientation_sample['small_angle_deg']:+.1f}° "
-            f"最终{orientation_sample['final_angle_deg']:+.1f}°"
+            f"  [姿态] {orientation_sample['pose_cn']} "
+            f"{orientation_sample['facing_cn']} "
+            f"相对水平{orientation_sample['tilt_from_horizontal_deg']:+.1f}°"
         )
 
         self.optimization_history.append({"stage": "initial_prompt", "prompt": current_prompt})
         print(f"  [VLM] 初始Prompt: {current_prompt}")
 
         judgment_history = []
+        round_candidates: List[Dict[str, Any]] = []
+        score_notes = ""
 
         for round_num in range(1, self.cfg.max_optimization_rounds + 1):
             print(f"  [VLM] 第{round_num}轮生成与评估...")
@@ -1344,35 +1796,78 @@ class VLMAnalyzer:
             if not initial_generation_func:
                 break
 
-            prompt_for_image = current_prompt
+            spec = round_size_spec(self.cfg, object_class, size_state.get("ratio"))
+            image_prompt = self.compose_generation_prompt(
+                background_path,
+                object_class,
+                spec,
+                format_size_history(size_rounds),
+                position_hint,
+                orientation_hint,
+                current_prompt,
+                score_notes,
+            )
+            prompt_for_image = image_prompt
+            # 不把上一轮生成图送入生图：wan 会当 img2img 二次渲染，第3轮明显发糊
             generated_path, api_result, full_prompt = initial_generation_func(
-                current_prompt, round_num, previous_path, position_hint, orientation_hint,
+                image_prompt, round_num, None, position_hint, orientation_hint,
             )
             last_image_path = generated_path
             last_api_result = api_result
             last_full_prompt = full_prompt
-            previous_path = generated_path
+            sharpness = image_sharpness_score(generated_path)
+            round_sharpness.append(sharpness)
+            print(f"  [清晰度] 第{round_num}轮 laplacian={sharpness:.1f}")
 
             evaluation = self.evaluate_generated_image(
-                generated_path, object_class, current_prompt, size_state.get("ratio"),
+                generated_path,
+                object_class,
+                image_prompt,
+                spec["target_ratio"],
+                size_spec=spec,
+                size_rounds=size_rounds,
             )
             
             size_judgment = evaluation.get("size_judgment", "acceptable")
             confidence = evaluation.get("confidence", 0.5)
             quality_score = evaluation.get("quality_score", 0.5)
             fusion_quality = evaluation.get("fusion_quality", "ok")
+            visible_ratio = evaluation.get("visible_ratio")
+            vlm_sharpness = evaluation.get("sharpness", "ok")
+            scores = score_triplet(evaluation)
+            mean_score = average_score(evaluation)
+            passed = scores_pass(evaluation)
             
             final_confidence = confidence
             final_quality_score = quality_score
             final_fusion_quality = fusion_quality
             final_size_judgment = size_judgment
             
-            judgment_history.append({
+            judgment_record = {
                 "round": round_num,
                 "judgment": size_judgment,
                 "confidence": confidence,
                 "quality_score": quality_score,
-                "fusion_quality": fusion_quality
+                "fusion_quality": fusion_quality,
+                "sharpness": sharpness,
+                "visible_ratio": visible_ratio,
+                "vlm_sharpness": vlm_sharpness,
+                "tone_score": scores["tone_score"],
+                "size_score": scores["size_score"],
+                "overall_score": scores["overall_score"],
+                "average_score": mean_score,
+                "passed": passed,
+                "image_path": str(generated_path),
+            }
+            judgment_history.append(judgment_record)
+            round_candidates.append({
+                "round": round_num,
+                "path": generated_path,
+                "prompt": image_prompt,
+                "full_prompt": full_prompt,
+                "api_result": api_result,
+                "average_score": mean_score,
+                "passed": passed,
             })
             
             if len(judgment_history) >= 2:
@@ -1388,17 +1883,48 @@ class VLMAnalyzer:
                         f"{evaluation.get('improvement_suggestion', '')} 前两轮都太大，这次明显缩小。"
                     )
             
+            visible_cm = (
+                float(visible_ratio) * HOPPER_FOV_M * 100.0
+                if isinstance(visible_ratio, (int, float)) else None
+            )
+            next_ratio = compute_next_target_ratio(spec, evaluation)
+            size_record = {
+                "round": round_num,
+                "target_ratio": spec["target_ratio"],
+                "target_cm": spec["target_cm"],
+                "diameter_cm": spec.get("diameter_cm"),
+                "diameter_to_height": spec.get("diameter_to_height"),
+                "cross_name": spec.get("cross_name"),
+                "scale_min": spec["scale_min"],
+                "scale_max": spec["scale_max"],
+                "size_brief": spec["size_brief"],
+                "generation_prompt": image_prompt,
+                "visible_ratio": visible_ratio,
+                "visible_cm": visible_cm,
+                "size_judgment": size_judgment,
+                "tone_score": scores["tone_score"],
+                "size_score": scores["size_score"],
+                "overall_score": scores["overall_score"],
+                "average_score": mean_score,
+                "next_target_ratio": next_ratio,
+            }
+            size_rounds.append(size_record)
             self.optimization_history.append({
                 "stage": f"evaluation_round_{round_num}",
                 "evaluation": evaluation,
-                "prompt_used": current_prompt
+                "prompt_used": image_prompt,
+                "size": size_record,
             })
-            print(f"  [VLM] 评估结果: size={size_judgment}, conf={confidence:.2f}, quality={quality_score:.2f}")
+            visible_txt = f"{visible_ratio:.1%}" if isinstance(visible_ratio, (int, float)) else "?"
+            print(
+                f"  [VLM] 评估结果: size={size_judgment}, visible={visible_txt}, "
+                f"色调={scores['tone_score']:.0f}, 大小={scores['size_score']:.0f}, "
+                f"整体={scores['overall_score']:.0f}, 平均={mean_score:.1f}"
+            )
             
-            should_retry = evaluation.get("should_retry", False)
-            
-            if size_judgment == "acceptable" or not should_retry:
-                print(f"  [VLM] ✅ 优化完成！异物大小判定: {size_judgment}")
+            if passed:
+                print(f"  [VLM] ✅ 色调、大小、整体都高于{PASS_SCORE:.0f}，采用第{round_num}轮")
+                selected_reason = "all_above_85"
                 success = True
                 if self.prompt_analyzer and image_id:
                     self.prompt_analyzer.add_prompt_record(
@@ -1414,13 +1940,39 @@ class VLMAnalyzer:
                     )
                 break
             
-            print(f"  [VLM] 🔄 优化Prompt (第{round_num}轮反馈)...")
-            current_prompt, size_state["ratio"] = self.optimize_prompt(
-                current_prompt, evaluation, object_class, round_num, size_state.get("ratio"),
+            score_notes = (
+                f"色调分{scores['tone_score']:.0f}，大小分{scores['size_score']:.0f}，"
+                f"整体分{scores['overall_score']:.0f}。三项都需要高于85。\n"
+                f"色调修正：{evaluation.get('tone_fix', '')}\n"
+                f"大小修正：{evaluation.get('size_fix', '')}\n"
+                f"整体修正：{evaluation.get('overall_fix', '')}\n"
+                "写给生图模型的提示词不要出现分数，也不要写上一轮，只把这三项修正写成这一轮的画面要求。"
             )
-            self.optimization_history.append({"stage": f"refined_prompt_round_{round_num}", "prompt": current_prompt})
-            print(f"  [VLM] 优化后Prompt: {current_prompt}")
+            size_state["ratio"] = next_ratio
+            next_spec = round_size_spec(self.cfg, object_class, next_ratio)
+            print(
+                f"  [尺寸] 下一轮设定 {next_spec['target_ratio']:.1%}"
+                f"（约{next_spec['target_cm']:.0f}厘米），只写入 VLM 历程，不写入生图提示词"
+            )
+            self.optimization_history.append({
+                "stage": f"next_size_round_{round_num}",
+                "next_target_ratio": next_ratio,
+                "size_brief": next_spec["size_brief"],
+            })
         
+        selected_reason = "all_above_85" if success else "best_average"
+        selected_round = round_candidates[-1]["round"] if success and round_candidates else None
+        if not success and round_candidates:
+            best = max(round_candidates, key=lambda item: item["average_score"])
+            selected_round = best["round"]
+            last_image_path = best["path"]
+            prompt_for_image = best["prompt"]
+            last_full_prompt = best["full_prompt"]
+            last_api_result = best["api_result"]
+            print(
+                f"  [VLM] 没有一轮三项都高于{PASS_SCORE:.0f}，"
+                f"采用第{best['round']}轮，平均分{best['average_score']:.1f}"
+            )
         if not success:
             print(f"  [VLM] ⚠️ 达到最大优化轮数 ({self.cfg.max_optimization_rounds})")
             if self.prompt_analyzer and image_id:
@@ -1445,6 +1997,11 @@ class VLMAnalyzer:
             "position_sample": position_sample,
             "orientation_sample": orientation_sample,
             "opening": opening,
+            "round_sharpness": round_sharpness,
+            "judgment_history": judgment_history,
+            "size_rounds": size_rounds,
+            "selected_round": selected_round,
+            "selected_reason": selected_reason,
         }
     
     def generate_initial_prompt(
@@ -1481,8 +2038,8 @@ class VLMAnalyzer:
         scenario = random.choice(enhancer.get_scenario_descriptions())
         
         return (
-            f"在{scenario}中，将一个极小的{color}{shape}的{object_class}{verb}{position}。\n"
-            f"【精确尺寸】异物尺寸必须极小：仅占画面宽度的1.5-2.5%，约为成人指甲盖大小。\n"
+            f"在{scenario}中，将一个真实大小的{color}{shape}的{object_class}{verb}{position}。\n"
+            f"【精确尺寸】{class_size_clause(self.cfg, object_class)}\n"
             f"【形态保持】必须严格保持{key_features}等关键形态特征，不能改变物体原本的形状。\n"
             f"【遮挡方式】{occlusion}\n"
             f"【表面质感】{weathering}\n"
@@ -1525,8 +2082,8 @@ class VLMAnalyzer:
         
         return (
             f"{core}\n"
-            f"将一个极小的{color}{shape}的{cls_name}{verb}{position}。\n"
-            f"【尺寸约束】异物必须极小：画面宽度的1.5-2.5%，不超过指甲盖大小。\n"
+            f"将一个真实大小的{color}{shape}的{cls_name}{verb}{position}。\n"
+            f"【尺寸约束】{class_size_clause(self.cfg, cls_name)}\n"
             f"【遮挡约束】{occlusion}\n"
             f"【形态约束】必须严格保持{key_features}等关键形态特征，不允许任何形式的变形。\n"
             f"【质感做旧】{weathering}\n"
@@ -1564,82 +2121,82 @@ def ensure_file(path: Path, default_text: str) -> None:
 def load_prompt_templates(path: Path) -> Dict[str, List[str]]:
     DEFAULT_PROMPT_TEMPLATES = {
         "fire_extinguisher": [
-            "在废钢堆的缝隙中嵌入一个极小的红色灭火器，被废钢遮挡只露一小部分，表面有灰尘划痕锈迹。",
-            "在废钢堆深处放入一个极小的灭火器，被遮挡不显眼，保持灭火器的典型形状，表面旧化带锈。",
+            "在废钢堆的缝隙中嵌入一个真实大小的红色灭火器，被废钢遮挡只露一小部分，表面有灰尘划痕锈迹。",
+            "在废钢堆深处放入一个真实大小的灭火器，被遮挡不显眼，保持灭火器的典型形状，表面旧化带锈。",
             "将一个小型灭火器塞入废钢件的夹缝中，瓶体大部分被遮挡，表面有褪色和锈迹。",
         ],
         "gas_cylinder": [
-            "在废钢背景中嵌入一个极小的气瓶，被废钢遮挡只露一小部分，保持气瓶的圆柱形和两端特征，表面有锈迹磨损。",
-            "在废钢堆深处放入一个极小的气瓶，被遮挡不显眼，保持气瓶的原本形态，表面旧化带锈。",
+            "在废钢背景中嵌入一个真实大小的气瓶，被废钢遮挡只露一小部分，保持气瓶的圆柱形和两端特征，表面有锈迹磨损。",
+            "在废钢堆深处放入一个真实大小的气瓶，被遮挡不显眼，保持气瓶的原本形态，表面旧化带锈。",
             "将一个小气瓶卡在废钢堆的角落里，被周围的废钢件遮挡，表面有腐蚀痕迹。",
         ],
         "shell": [
-            "在废钢背景中嵌入一个极小的炮弹，被废钢遮挡只露一小部分，保持炮弹的流线型弹头特征，表面有铁锈泥土。",
-            "在废钢堆深处放入一个极小的炮弹，被遮挡不显眼，保持炮弹的典型外观，表面旧化带锈。",
+            "在废钢背景中嵌入一个真实大小的炮弹，被废钢遮挡只露一小部分，保持炮弹的流线型弹头特征，表面有铁锈泥土。",
+            "在废钢堆深处放入一个真实大小的炮弹，被遮挡不显眼，保持炮弹的典型外观，表面旧化带锈。",
             "将一枚小炮弹塞入废钢缝隙中，弹体被废钢覆盖，只露出尾部，表面布满锈迹。",
         ],
         "lpg_tank": [
-            "在废钢背景中嵌入一个极小的液化气罐，被废钢遮挡只露一小部分，保持液化气罐的罐体形状和阀门结构，表面有凹坑锈迹。",
-            "在废钢堆深处放入一个极小的液化气罐，被遮挡不显眼，保持液化气罐的形态，表面旧化带锈。",
+            "在废钢背景中嵌入一个真实大小的液化气罐，被废钢遮挡只露一小部分，保持液化气罐的罐体形状和阀门结构，表面有凹坑锈迹。",
+            "在废钢堆深处放入一个真实大小的液化气罐，被遮挡不显眼，保持液化气罐的形态，表面旧化带锈。",
             "将一个小液化气罐横放在废钢堆中，大部分被废钢覆盖，表面有严重锈蚀。",
         ],
         "accumulator": [
-            "在废钢背景中嵌入一个极小的蓄能器，被废钢遮挡只露一小部分，保持蓄能器的圆柱形和端部结构，表面有油泥灰尘。",
-            "在废钢堆深处放入一个极小的蓄能器，被遮挡不显眼，保持蓄能器的原本形态，表面旧化带锈。",
+            "在废钢背景中嵌入一个真实大小的蓄能器，被废钢遮挡只露一小部分，保持蓄能器的圆柱形和端部结构，表面有油泥灰尘。",
+            "在废钢堆深处放入一个真实大小的蓄能器，被遮挡不显眼，保持蓄能器的原本形态，表面旧化带锈。",
             "将一个小蓄能器嵌入废钢堆的中间层，被周围的废钢件包裹，表面有油污。",
         ],
         "hydraulic_cylinder": [
-            "在废钢背景中嵌入一个极小的液压缸，被废钢遮挡只露一小部分，保持液压缸的圆柱形和活塞杆特征，表面有油泥划痕。",
-            "在废钢堆深处放入一个极小的液压缸，被遮挡不显眼，保持液压缸的典型形状，表面旧化带锈。",
+            "在废钢背景中嵌入一个真实大小的液压缸，被废钢遮挡只露一小部分，保持液压缸的圆柱形和活塞杆特征，表面有油泥划痕。",
+            "在废钢堆深处放入一个真实大小的液压缸，被遮挡不显眼，保持液压缸的典型形状，表面旧化带锈。",
             "将一个报废的小液压缸塞入废钢缝隙中，缸体被废钢覆盖，活塞杆露出微小部分，表面有油渍。",
         ],
         "shock_absorber": [
-            "在废钢背景中嵌入一个极小的减震器，被废钢遮挡只露一小部分，保持减震器的圆柱形和连接结构，表面有锈蚀油渍。",
-            "在废钢堆深处放入一个极小的减震器，被遮挡不显眼，保持减震器的形态，表面旧化带锈。",
+            "在废钢背景中嵌入一个真实大小的减震器，被废钢遮挡只露一小部分，保持减震器的圆柱形和连接结构，表面有锈蚀油渍。",
+            "在废钢堆深处放入一个真实大小的减震器，被遮挡不显眼，保持减震器的形态，表面旧化带锈。",
             "将一个小减震器卡在废钢件的夹缝中，大部分被遮挡，表面有磨损和锈迹。",
         ],
         "sealed_container": [
-            "在废钢背景中嵌入一个极小的密闭箱体，被废钢遮挡只露一小部分，保持箱体的方形结构和棱边特征，表面有泥土锈迹。",
-            "在废钢堆深处放入一个极小的密闭箱体，被遮挡不显眼，保持箱体的原本形状，表面旧化带锈。",
+            "在废钢背景中嵌入一个真实大小的密闭箱体，被废钢遮挡只露一小部分，保持箱体的方形结构和棱边特征，表面有泥土锈迹。",
+            "在废钢堆深处放入一个真实大小的密闭箱体，被遮挡不显眼，保持箱体的原本形状，表面旧化带锈。",
         ],
         "tire": [
-            "在废钢背景中嵌入一个极小的轮胎，被废钢遮挡只露一小部分，保持轮胎的圆形和胎纹特征，表面有油污磨损。",
-            "在废钢堆深处放入一个极小的轮胎，被遮挡不显眼，保持轮胎的典型形态，表面旧化带泥。",
+            "在废钢背景中嵌入一个真实大小的轮胎，被废钢遮挡只露一小部分，保持轮胎的圆形和胎纹特征，表面有油污磨损。",
+            "在废钢堆深处放入一个真实大小的轮胎，被遮挡不显眼，保持轮胎的典型形态，表面旧化带泥。",
             "将一个小轮胎嵌入废钢堆中，被周围的废钢挤压，只露出部分胎面，表面有磨损痕迹。",
         ],
         "roller": [
-            "在废钢背景中嵌入一个极小的滚筒，被废钢遮挡只露一小部分，保持滚筒的圆柱形和表面特征，表面有铁锈油泥。",
-            "在废钢堆深处放入一个极小的滚筒，被遮挡不显眼，保持滚筒的原本形状，表面旧化带锈。",
+            "在废钢背景中嵌入一个真实大小的滚筒，被废钢遮挡只露一小部分，保持滚筒的圆柱形和表面特征，表面有铁锈油泥。",
+            "在废钢堆深处放入一个真实大小的滚筒，被遮挡不显眼，保持滚筒的原本形状，表面旧化带锈。",
         ],
         "wire_rope_drum": [
-            "在废钢背景中嵌入一个极小的钢丝绳卷筒，被废钢遮挡只露一小部分，保持卷筒的圆柱形和法兰结构，表面有锈蚀。",
-            "在废钢堆深处放入一个极小的钢丝绳卷筒，被遮挡不显眼，保持卷筒的形态，表面旧化带锈。",
+            "在废钢背景中嵌入一个真实大小的钢丝绳卷筒，被废钢遮挡只露一小部分，保持卷筒的圆柱形和法兰结构，表面有锈蚀。",
+            "在废钢堆深处放入一个真实大小的钢丝绳卷筒，被遮挡不显眼，保持卷筒的形态，表面旧化带锈。",
             "将一个小钢丝绳卷筒塞入废钢堆的缝隙中，被废钢覆盖，表面缠绕着断裂的钢丝，锈迹斑斑。",
         ],
         "axle": [
-            "在废钢背景中嵌入一个极小的汽车后桥，被废钢遮挡只露一小部分，保持后桥的轴形和端部结构，表面有油污锈迹。",
-            "在废钢堆深处放入一个极小的汽车后桥，被遮挡不显眼，保持后桥的典型形状，表面旧化带锈。",
+            "在废钢背景中嵌入一个真实大小的汽车后桥，被废钢遮挡只露一小部分，保持后桥的轴形和端部结构，表面有油污锈迹。",
+            "在废钢堆深处放入一个真实大小的汽车后桥，被遮挡不显眼，保持后桥的典型形状，表面旧化带锈。",
             "将一个小型后桥轴嵌入废钢堆中，被废钢件压住，只露出轴端，表面有油污和锈蚀。",
         ],
         "reducer": [
-            "在废钢背景中嵌入一个极小的减速机，被废钢遮挡只露一小部分，保持减速机的箱体形状和连接轴，表面有灰尘油污。",
-            "在废钢堆深处放入一个极小的减速机，被遮挡不显眼，保持减速机的形态，表面旧化带锈。",
+            "在废钢背景中嵌入一个真实大小的减速机，被废钢遮挡只露一小部分，保持减速机的箱体形状和连接轴，表面有灰尘油污。",
+            "在废钢堆深处放入一个真实大小的减速机，被遮挡不显眼，保持减速机的形态，表面旧化带锈。",
         ],
         "track_roller": [
-            "在废钢背景中嵌入一个极小的支重轮，被废钢遮挡只露一小部分，保持支重轮的圆形和轮缘特征，表面有铁锈泥土。",
-            "在废钢堆深处放入一个极小的支重轮，被遮挡不显眼，保持支重轮的原本形状，表面旧化带锈。",
+            "在废钢背景中嵌入一个真实大小的支重轮，被废钢遮挡只露一小部分，保持支重轮的圆形和轮缘特征，表面有铁锈泥土。",
+            "在废钢堆深处放入一个真实大小的支重轮，被遮挡不显眼，保持支重轮的原本形状，表面旧化带锈。",
         ],
         "drive_sprocket": [
-            "在废钢背景中嵌入一个极小的驱动轮，被废钢遮挡只露一小部分，保持驱动轮的圆形和齿形特征，表面有锈迹磨损。",
-            "在废钢堆深处放入一个极小的驱动轮，被遮挡不显眼，保持驱动轮的典型形态，表面旧化带锈。",
+            "在废钢背景中嵌入一个真实大小的驱动轮，被废钢遮挡只露一小部分，保持驱动轮的圆形和齿形特征，表面有锈迹磨损。",
+            "在废钢堆深处放入一个真实大小的驱动轮，被遮挡不显眼，保持驱动轮的典型形态，表面旧化带锈。",
         ],
         "wheel_end": [
-            "在废钢背景中嵌入一个极小的轮边总成，被废钢遮挡只露一小部分，保持轮边总成的盘形和结构特征，表面有油泥灰尘。",
-            "在废钢堆深处放入一个极小的轮边总成，被遮挡不显眼，保持轮边总成的形态，表面旧化带锈。",
+            "在废钢背景中嵌入一个真实大小的轮边总成，被废钢遮挡只露一小部分，保持轮边总成的盘形和结构特征，表面有油泥灰尘。",
+            "在废钢堆深处放入一个真实大小的轮边总成，被遮挡不显眼，保持轮边总成的形态，表面旧化带锈。",
         ],
         "guard_block": [
-            "在废钢背景中嵌入一个极小的防护墩，被废钢遮挡只露一小部分，保持防护墩的方形和棱角特征，表面有破损泥土。",
-            "在废钢堆深处放入一个极小的防护墩，被遮挡不显眼，保持防护墩的原本形状，表面旧化带泥。",
+            "在废钢背景中嵌入一个真实大小的防护墩，被废钢遮挡只露一小部分，保持防护墩的方形和棱角特征，表面有破损泥土。",
+            "在废钢堆深处放入一个真实大小的防护墩，被遮挡不显眼，保持防护墩的原本形状，表面旧化带泥。",
         ],
     }
     ensure_file(path, json.dumps(DEFAULT_PROMPT_TEMPLATES, ensure_ascii=False, indent=2))
@@ -1649,14 +2206,14 @@ def load_prompt_templates(path: Path) -> Dict[str, List[str]]:
 def load_negative_prompt(path: Path) -> str:
     DEFAULT_NEGATIVE_PROMPT = (
         "不要改变原始背景，不要生成卡通风格，不要生成干净崭新的异物，"
-        "不要让异物悬浮，不要让异物尺寸过大（不能超过画面宽度的5%），"
+        "不要让异物悬浮，不要把异物画成玩具或缩得比真实厘米更小，不要画得比真实参照长度更大，"
         "不要改变异物的基本形状和结构特征，必须保持物体原本的形态，"
         "禁止生成反光强烈、亮面、光滑的物体，纹理必须与废钢一致，"
-        "异物必须90%以上被废钢遮挡，只露出极其微小的一角。"
+        "异物必须被废钢遮挡大部分，但仍露出能辨认的一段。"
         "禁止对异物进行任何形式的变形、拉伸、扭曲或比例改变。"
         "不要生成看起来像是人工放置的物体，应该看起来像是自然存在于废钢堆中。"
         "不要放在很显眼的地方，不要让异物成为画面的视觉焦点，必须与背景完美融合。"
-        "不要把异物的画质、像素弄的很高，保持和背景一致的画质和像素。"
+        "不要柔化整张图，不要降低清晰度，不要二次渲染导致发糊，保持与监控原图相同的锐利度。"
     )
     ensure_file(path, DEFAULT_NEGATIVE_PROMPT)
     return path.read_text(encoding="utf-8").strip()
@@ -1690,22 +2247,15 @@ def build_prompt(
     cfg: Optional[AppConfig] = None,
     target_ratio: Optional[float] = None,
 ) -> str:
-    size_info = ""
-    if background_path:
+    if "【本轮设定尺寸】" in (prompt or ""):
+        size_info = "尺寸只按提示词里的【本轮设定尺寸】绘制：结构用真实厘米，可见最长边用本轮厘米，不要把筒径再缩小，不要参考更早轮次"
+    elif background_path:
         try:
-            size_data = calculate_optimal_size(
-                background_path, object_class, cfg, target_ratio,
-            )
-            target_w = size_data["target_width"]
-            ratio = size_data["target_ratio"] * 100
-            lo, hi = size_data["scale_min"] * 100, size_data["scale_max"] * 100
-            size_info = (
-                f"{object_class}按真实尺寸：可见最长边约占画面宽度的{ratio:.1f}%"
-                f"（约{target_w}像素，该类别配置 {lo:.1f}–{hi:.1f}%）。"
-                f"保持该物体相对废钢的真实大小，不要画成玩具，也不要画成画面主体"
-            )
+            size_info = class_size_clause(cfg, object_class, target_ratio)
         except Exception:
             size_info = f"{object_class}必须按真实物体大小出现，不要画成玩具或占据整幅画面"
+    else:
+        size_info = f"{object_class}必须按真实物体大小出现，不要画成玩具或占据整幅画面"
     
     enhancer = PromptEnhancer()
     weathering = random.choice(enhancer.get_weathering_descriptions(object_class))
@@ -1715,14 +2265,14 @@ def build_prompt(
     fusion_enhance = (
         "【精确尺寸控制】\n"
         f"1. {size_info}\n"
-        "2. 异物必须按该类别真实大小出现，大部分被废钢挡住，但仍留下能辨认的一段\n"
-        "3. 如果明显大于该类真实尺寸则缩小；如果没放进去或完全看不见，这一轮必须按真实尺寸放入\n"
+        "2. 筒径、握把、喷管、活塞杆、耳环、法兰使用真实厘米，不要按可见边同比缩成模型\n"
+        "3. 可见最长边对应该件在240厘米车斗视野中的真实尺度；没放进去时按同一真实尺寸放入\n"
         "\n【形状严格保持】\n"
         f"4. 必须严格保持{object_class}原本的形状、结构、比例和轮廓特征\n"
         "5. 不允许任何形式的变形、拉伸、扭曲或比例改变\n"
         "6. 圆形必须保持圆形，圆柱形保持圆柱形，方形保持方形\n"
         "\n【嵌入与遮挡】\n"
-        "7. 异物必须被废钢挤压包裹，从废钢缝隙中露出极小部分，像被自然埋在里面\n"
+        "7. 异物必须被废钢挤压包裹，从废钢缝隙中露出能辨认的一段，像被自然埋在里面\n"
         "8. 异物的边缘必须被废钢遮挡，有明显的遮挡和交错，大部分被挡住，但仍须露出能辨认的一小段\n"
         "9. 异物表面的锈迹、油污、灰尘纹理必须与周围废钢完全一致\n"
         "\n【色彩与光影融合】\n"
@@ -1735,7 +2285,13 @@ def build_prompt(
         f"15. {weathering}\n"
         f"16. 整体场景：{scenario}\n"
         "17. 废钢场景、时间戳和摄像头文字保持原样，但必须在指定位置新增异物，输出不能与背景图相同\n"
-        "18. 整体风格必须与背景图一致，包括清晰度、噪点、色调等\n"
+        "18. 整体风格必须与背景图一致，包括清晰度、锐利度、传感器噪点和色调；禁止柔化、涂抹或二次渲染导致发糊\n"
+        "19. 每一轮都只在原始监控背景上重画，不要把任何已生成图当作画布\n"
+        "\n【多视图只作参考】\n"
+        f"20. 第1张图是废钢监控原图，只作为画布；第2张及之后是{object_class}的多视角参考\n"
+        "21. 参考图只用来认外形、颜色、零件和直径/高度，不要把参考图里的物体直接插入场景\n"
+        "22. 禁止抠图、贴图、叠加、原样拷贝；禁止留下白底、摄影棚、宫格线或前/后/左/右/上/下标签\n"
+        "23. 必须按本轮真实厘米在废钢堆里重新画出被埋住的同类异物，光影锈蚀与车斗一致\n"
     )
     if position_hint:
         fusion_enhance += f"\n【出现位置】异物必须出现在{position_hint}。\n"
@@ -1755,6 +2311,7 @@ def build_prompt(
         f"【必须放入】必须把{object_class}放进第1张背景图的指定位置。"
         "可以小、大部分被遮挡，但必须露出能辨认的一小段。"
         "禁止省略异物，禁止输出一张与背景图相同的图。"
+        f"多视图里的{object_class}只是外形样本，禁止把它直接插入第1张场景。"
     )
     return full_prompt
 
@@ -1769,10 +2326,10 @@ def _encode_input_images(image_paths: List[Path]) -> Tuple[List[str], int, int]:
     import io
 
     images: List[str] = []
-    final_w = 0
-    final_h = 0
+    canvas_w = 0
+    canvas_h = 0
 
-    for path in image_paths:
+    for index, path in enumerate(image_paths):
         img = Image.open(path)
         w, h = img.size
         total_pixels = w * h
@@ -1788,17 +2345,18 @@ def _encode_input_images(image_paths: List[Path]) -> Tuple[List[str], int, int]:
             img = img.resize((new_w, new_h), Image.Resampling.LANCZOS)
             w, h = new_w, new_h
 
-        final_w, final_h = w, h
+        if index == 0:
+            canvas_w, canvas_h = w, h
 
         buffer = io.BytesIO()
         if img.mode in ('RGBA', 'LA', 'P'):
             img = img.convert('RGB')
-        img.save(buffer, format='JPEG', quality=92)
+        img.save(buffer, format='JPEG', quality=95)
         buffer.seek(0)
         b64_data = base64.b64encode(buffer.read()).decode('utf-8')
         images.append(f"data:image/jpeg;base64,{b64_data}")
 
-    return images, final_w, final_h
+    return images, canvas_w, canvas_h
 
 
 def build_request_payload(image_paths: List[Path], prompt: str, cfg: AppConfig) -> Dict[str, Any]:
@@ -1845,16 +2403,22 @@ def build_request_payload(image_paths: List[Path], prompt: str, cfg: AppConfig) 
     raise ValueError(f"未知图像协议: {cfg.image_protocol}")
 
 
-def generation_role_prompt(prompt: str, include_previous: bool) -> str:
-    """单次调用的文字：按图序标明背景图，以及上一张效果差的生成图。"""
+def generation_role_prompt(prompt: str, view_count: int = 0) -> str:
+    """单次调用的文字：只把原始背景当画布；多视图只认外形，禁止当贴图。"""
     lines = [
-        "第1张图是最初的废钢背景图，只作为画布。必须在这张图上新增异物。",
+        "第1张图是最初的废钢监控原图，只作为画布。必须在这张图上新增异物。",
         "废钢场景、时间戳和摄像头文字保持原样，但输出不能与这张背景图相同。",
+        "输出必须保持与这张监控原图相同的清晰度、锐利度和传感器噪点，禁止柔化、涂抹、降分辨率或二次渲染导致发糊。",
+        "每一轮都只在这张原始背景上重画，不要使用任何已生成图当作画布。",
     ]
-    if include_previous:
-        lines.append(
-            "第2张图是上一轮效果差的生成图，只用于对照上次的问题。"
-            "不要照抄第2张图，尤其不要再输出一张没有异物的背景。"
+    if view_count > 0:
+        lines.extend(
+            [
+                f"后面 {view_count} 张是异物的多视角参考图，只用来认形状、颜色、零件和比例。",
+                "禁止把参考图里的物体直接抠图、贴图、插入、叠加或原样拷贝进第1张场景。",
+                "禁止保留白底、摄影棚、宫格分割线，以及前、后、左、右、上、下这类视角标签。",
+                "必须按本轮设定尺寸，在废钢堆里重新画出一件被埋住的同类异物，光影和锈蚀跟车斗一致。",
+            ]
         )
     lines.append(prompt)
     return "\n".join(lines)
@@ -1865,13 +2429,16 @@ def generate_single_call(
     background_path: Path,
     prompt: str,
     previous_path: Optional[Path] = None,
+    reference_paths: Optional[List[Path]] = None,
 ) -> Tuple[Dict[str, Any], str]:
-    """官方单次生图。第1次只有背景；之后为背景 + 上一张差图，不累积 messages。"""
-    labeled = generation_role_prompt(prompt, previous_path is not None)
-    image_paths = [background_path]
-    if previous_path is not None:
-        image_paths.append(previous_path)
-    print(f"  [生图] 单次调用，输入 {len(image_paths)} 张图")
+    """每轮把原始背景当画布；可选附带多视图参考。不把上一轮生成图再输入。"""
+    del previous_path
+    refs = [p for p in (reference_paths or []) if p and p.is_file()]
+    labeled = generation_role_prompt(prompt, view_count=len(refs))
+    image_paths = [background_path, *refs]
+    print(f"  [生图] 单次调用，输入 {len(image_paths)} 张图（1张背景画布 + {len(refs)} 张多视图参考）")
+    for idx, path in enumerate(refs, start=2):
+        print(f"  [生图] 第{idx}张参考: {path.name}")
     payload = build_request_payload(image_paths, labeled, cfg)
     return call_image_api(payload, cfg), labeled
 
@@ -2099,6 +2666,7 @@ def load_app_config() -> AppConfig:
         max_images=int(raw.get("max_images", 1)),
         object_resize_scale=float(raw_app.get("object_resize_scale", raw.get("object_resize_scale", 0.022))),
         object_resize_scales=parse_object_resize_scales(raw_app),
+        object_size_briefs=parse_object_size_briefs(raw_app),
         object_canvas_scale=float(raw_app.get("object_canvas_scale", raw.get("object_canvas_scale", 1.0))),
         object_opacity=float(raw.get("object_opacity", 0.5)),
         object_anchor=raw.get("object_anchor", "center"),
@@ -2121,9 +2689,13 @@ def load_app_config() -> AppConfig:
         vlm_model=bound["vlm_model"],
         enable_vlm_optimization=raw_app.get("enable_vlm_optimization", raw.get("enable_vlm_optimization", True)),
         max_optimization_rounds=int(raw_app.get("max_optimization_rounds", raw.get("max_optimization_rounds", 3))),
-        size_tolerance=raw_app.get("size_tolerance", raw.get("size_tolerance", "very_small")),
+        size_tolerance=raw_app.get("size_tolerance", raw.get("size_tolerance", "class_range")),
+        feed_object_views=bool(raw_app.get("feed_object_views", raw.get("feed_object_views", True))),
+        max_object_views=int(raw_app.get("max_object_views", raw.get("max_object_views", 3))),
+        six_views_dir=base_dir / raw.get("six_views_dir", "output/six_views"),
     )
     print(f"[DEBUG] 已加载 {len(cfg.object_resize_scales)} 类物体真实缩放尺寸")
+    print(f"[DEBUG] 已加载 {len(cfg.object_size_briefs)} 类物体结构尺寸")
     return cfg
 
 
@@ -2224,6 +2796,7 @@ def main() -> None:
     object_items = get_all_object_images_with_classes(cfg.objects_dir, prompt_templates)
     if not object_items:
         raise FileNotFoundError(f"No object images found in {cfg.objects_dir}")
+    catalog_items = list(object_items)
 
     if args.objects:
         specified = set(args.objects)
@@ -2268,10 +2841,23 @@ def main() -> None:
         
         object_class = selected_item["class"]
         object_path = selected_item["path"]
+        view_paths: List[Path] = []
         size_data = calculate_optimal_size(background_path, object_class, cfg)
         size_state = {"ratio": size_data["target_ratio"]}
         print(f"  [物体] 选择: {object_path.name} (类别: {object_class}, 权重: {selected_item['weight']})")
         print(f"  [尺寸] {size_data['description']}")
+        if cfg.feed_object_views:
+            view_paths = collect_object_views(
+                object_path,
+                object_class,
+                catalog_items,
+                cfg.max_object_views,
+                cfg.six_views_dir,
+            )
+            print(
+                f"  [多视图] 参考 {len(view_paths)} 张（只认外形，不贴图）: "
+                f"{[p.name for p in view_paths]}"
+            )
         
         base_prompt = random.choice(prompt_templates[object_class])
         
@@ -2291,6 +2877,7 @@ def main() -> None:
             position_sample = None
             orientation_sample = None
             last_image_path: Optional[Path] = None
+            outcome: Dict[str, Any] = {}
 
             if vlm_analyzer and object_path:
                 vlm_used = True
@@ -2314,7 +2901,11 @@ def main() -> None:
                         target_ratio=size_state["ratio"],
                     )
                     api_result, labeled = generate_single_call(
-                        cfg, background_path, round_prompt, previous_path,
+                        cfg,
+                        background_path,
+                        round_prompt,
+                        previous_path,
+                        reference_paths=view_paths,
                     )
                     urls = extract_image_urls(api_result, cfg.image_protocol)
                     image_bytes = download_image(urls[0])
@@ -2345,7 +2936,7 @@ def main() -> None:
             else:
                 scrap_geometry = fallback_scrap_geometry()
                 position_sample = sample_foreign_object_position(scrap_geometry)
-                orientation_sample = sample_horizontal_orientation()
+                orientation_sample = sample_object_pose(object_class)
                 position_hint = position_sample["description"]
                 orientation_hint = orientation_sample["description"]
                 print(
@@ -2354,10 +2945,9 @@ def main() -> None:
                     f"p={position_sample['sampled_probability']:.3f} | {position_hint}"
                 )
                 print(
-                    f"  [横放] {orientation_sample['facing_cn']} "
-                    f"基准{orientation_sample['base_angle_deg']:+.0f}° "
-                    f"微调{orientation_sample['small_angle_deg']:+.1f}° "
-                    f"最终{orientation_sample['final_angle_deg']:+.1f}°"
+                    f"  [姿态] {orientation_sample['pose_cn']} "
+                    f"{orientation_sample['facing_cn']} "
+                    f"相对水平{orientation_sample['tilt_from_horizontal_deg']:+.1f}°"
                 )
                 round_prompt = build_prompt(
                     object_class, base_prompt, negative_prompt,
@@ -2367,7 +2957,9 @@ def main() -> None:
                     cfg=cfg,
                     target_ratio=size_state["ratio"],
                 )
-                result, full_prompt = generate_single_call(cfg, background_path, round_prompt)
+                result, full_prompt = generate_single_call(
+                    cfg, background_path, round_prompt, reference_paths=view_paths,
+                )
                 final_prompt = full_prompt
                 urls = extract_image_urls(result, cfg.image_protocol)
                 image_bytes = download_image(urls[0])
@@ -2387,9 +2979,13 @@ def main() -> None:
                 "index": bg_idx,
                 "background_image": str(background_path),
                 "object_image": str(object_path) if object_path else None,
+                "object_views": [str(p) for p in view_paths],
                 "object_class": object_class,
                 "object_scale": {
-                    "target_ratio": size_state["ratio"],
+                    "target_ratio": (
+                        ((outcome or {}).get("size_rounds") or [{}])[-1].get("target_ratio", size_state["ratio"])
+                        if vlm_used else size_state["ratio"]
+                    ),
                     "scale_min": size_data["scale_min"],
                     "scale_max": size_data["scale_max"],
                     "description": size_data["description"],
@@ -2411,6 +3007,11 @@ def main() -> None:
                 "object_orientation": orientation_sample,
                 "optimization_rounds": len([h for h in optimization_history if h.get("stage", "").startswith("evaluation_round")]),
                 "optimization_history": optimization_history if optimization_history else None,
+                "round_sharpness": (outcome or {}).get("round_sharpness") if vlm_used else None,
+                "judgment_history": (outcome or {}).get("judgment_history") if vlm_used else None,
+                "size_rounds": (outcome or {}).get("size_rounds") if vlm_used else None,
+                "selected_round": (outcome or {}).get("selected_round") if vlm_used else None,
+                "selected_reason": (outcome or {}).get("selected_reason") if vlm_used else None,
                 "quality_status": "pending_review",
                 "review_result": None,
                 "notes": f"Generated with {cfg.model} (HTTP), VLM: {cfg.vlm_model}",
@@ -2426,6 +3027,7 @@ def main() -> None:
                 "index": bg_idx,
                 "background_image": str(background_path),
                 "object_image": str(object_path) if object_path else None,
+                "object_views": [str(p) for p in view_paths],
                 "object_class": object_class,
                 "error": str(exc),
                 "timestamp": datetime.now(timezone.utc).isoformat(),
