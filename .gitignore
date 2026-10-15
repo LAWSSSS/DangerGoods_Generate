@@ -1,5 +1,7 @@
 # Secrets
 config_bailian.yaml
+.env
+.env.*
 
 # Generated outputs
 output/
@@ -9,6 +11,9 @@ __pycache__/
 *.py[cod]
 .venv/
 venv/
+work/
+.pytest_cache/
+.ruff_cache/
 
 # OS / editor
 .DS_Store

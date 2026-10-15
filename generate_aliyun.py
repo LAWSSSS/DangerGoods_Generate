@@ -28,6 +28,24 @@ import requests
 import yaml
 from PIL import Image, ImageDraw, ImageFilter
 import urllib3
+from object_catalog import (
+    catalog_items as per_item_catalog_items,
+    evaluation_user_prompt as per_item_evaluation_prompt,
+    evaluator_prompt as per_item_evaluator_prompt,
+    load_catalog as load_per_item_catalog,
+    profile_brief as per_item_brief,
+    render_prompt as render_per_item_prompt,
+    size_spec as per_item_size_spec,
+)
+from fusion_quality import (
+    FUSION_SCORE_AXES,
+    appearance_neutral_name,
+    edit_region as fusion_edit_region,
+    geometry_identity,
+    quality_gate as fusion_quality_gate,
+    review_requirements,
+    scene_context_prompt,
+)
 
 # ============ 强制禁用SSL验证 ============
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -106,7 +124,7 @@ class PromptAnalyzer:
                           size_judgment: str, confidence: float, 
                           quality_score: float, fusion_quality: str,
                           round_num: int = 0,
-                          full_prompt: str = ""):
+                          full_prompt: str = "", fusion_passed: Optional[bool] = None):
         record = {
             "image_id": image_id,
             "object_class": object_class,
@@ -118,13 +136,15 @@ class PromptAnalyzer:
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "prompt_text": prompt,
             "full_prompt": full_prompt if full_prompt else prompt,
-            "prompt_length": len(prompt)
+            "prompt_length": len(prompt),
+            "fusion_passed": fusion_passed,
         }
         
         is_good = (
             size_judgment == "acceptable" and 
             confidence >= 0.5 and 
             quality_score >= 0.5
+            and fusion_passed is not False
         )
         
         if is_good:
@@ -183,7 +203,7 @@ class PromptAnalyzer:
 
 @dataclass
 class AppConfig:
-    image_api_key: str
+    image_api_key: str = field(repr=False)
     model: str
     image_api_url: str
     image_protocol: str
@@ -214,7 +234,7 @@ class AppConfig:
     output_bbox_dir: Path
     output_analysis_dir: Path
     
-    vlm_api_key: str
+    vlm_api_key: str = field(repr=False)
     vlm_api_url: str
     vlm_model: str
     enable_vlm_optimization: bool = True
@@ -223,6 +243,21 @@ class AppConfig:
     feed_object_views: bool = True
     max_object_views: int = 3
     six_views_dir: Optional[Path] = None
+    object_catalog_path: Optional[Path] = None
+    object_catalog: Optional[Dict[str, Any]] = None
+    active_object_profile: Optional[Dict[str, Any]] = None
+    background_catalog: Optional[Dict[str, Any]] = None
+    active_background_profile: Optional[Dict[str, Any]] = None
+    active_scene_context: Optional[Dict[str, Any]] = None
+    active_edit_region: Optional[List[float]] = None
+    active_position_xy: Optional[List[float]] = None
+    use_interactive_edit_region: bool = True
+    vlm_thinking_mode: str = "disabled"
+    prepare_weathered_reference: bool = True
+    active_weathered_reference: Optional[Path] = None
+    active_reference_kind: str = "six_view_atlas"
+    active_reference_preparation: Optional[Dict[str, Any]] = None
+    weathered_reference_rounds: int = 2
     
     vlm_evaluator_prompt: str = field(default_factory=lambda: (
         "你是废钢车斗异物质检员。只输出有效JSON。车斗水平视野约240厘米。\n"
@@ -364,6 +399,9 @@ def actual_scale_range_from_brief(brief: Dict[str, Any]) -> Tuple[float, float]:
 
 
 def object_scale_range(cfg: AppConfig, object_class: Optional[str] = None) -> Tuple[float, float]:
+    profile = getattr(cfg, "active_object_profile", None)
+    if profile and profile["category"] == object_class:
+        return tuple(profile["size_policy"]["visible_ratio_range"])
     fallback = (cfg.object_resize_scale, cfg.object_resize_scale)
     if not object_class:
         return fallback
@@ -423,6 +461,9 @@ def parse_object_size_briefs(raw: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
 def lookup_size_brief(cfg: Optional[AppConfig], object_class: Optional[str]) -> Optional[Dict[str, Any]]:
     if cfg is None or not object_class:
         return None
+    profile = getattr(cfg, "active_object_profile", None)
+    if profile and profile["category"] == object_class:
+        return per_item_brief(profile)
     briefs = cfg.object_size_briefs or {}
     if object_class in briefs:
         return briefs[object_class]
@@ -440,7 +481,10 @@ def round_size_spec(
     object_class: Optional[str],
     target_ratio: Optional[float] = None,
 ) -> Dict[str, Any]:
-    """本轮设定尺寸。结构用真实厘米，可见边只换算这一轮在 240 厘米视野里的长度。"""
+    """返回当前物品工作尺寸和本轮可见占比，兼容旧类别配置。"""
+    profile = getattr(cfg, "active_object_profile", None) if cfg is not None else None
+    if profile and profile["category"] == object_class:
+        return per_item_size_spec(profile, target_ratio)
     name = object_class or "异物"
     low, high = object_scale_range(cfg, object_class) if cfg is not None else (0.06, 0.06)
     ratio = target_ratio if target_ratio is not None else (low + high) / 2
@@ -598,7 +642,7 @@ def calculate_optimal_size(
     target_ratio = min(max(target_ratio, scale_min * 0.8), scale_max * 1.15)
     target_width = max(16, int(round(bg_w * target_ratio)))
     target_height = max(16, int(round(bg_h * target_ratio)))
-    return {
+    result = {
         "bg_size": (bg_w, bg_h),
         "target_width": target_width,
         "target_height": target_height,
@@ -611,6 +655,15 @@ def calculate_optimal_size(
             f"（约{target_ratio * HOPPER_FOV_M * 100:.0f}厘米，配置 {scale_min*100:.1f}–{scale_max*100:.1f}%）"
         ),
     }
+    profile = getattr(cfg, "active_object_profile", None) if cfg is not None else None
+    if profile:
+        result["profile_id"] = profile["id"]
+        result["dimension_evidence"] = profile["dimension_evidence"]
+        result["description"] = (
+            f"{profile['id']} {profile['name']}主体可见最长边目标{target_ratio:.2%}；"
+            f"允许{scale_min:.2%}–{scale_max:.2%}；背景尺度尚未标定，厘米为工作假设。"
+        )
+    return result
 
 
 # ============ Prompt增强工具 ============
@@ -1267,6 +1320,10 @@ def collect_object_views(
     six_views_dir: Optional[Path] = None,
 ) -> List[Path]:
     """同类实拍和已有六视图格子，只作外形参考，不作为贴图素材。"""
+    # Each atlas describes one specific item; never append other items from its broad class.
+    matched_item = next((item for item in object_items if item.get("profile_id") and item["path"] == object_path), None)
+    if matched_item:
+        return [object_path] if max_views > 0 else []
     views: List[Path] = []
     seen = set()
 
@@ -1313,7 +1370,7 @@ class VLMAnalyzer:
 
     def _post_vlm(self, messages: List[Dict[str, Any]], max_tokens: int) -> str:
         api_key = self.cfg.vlm_api_key
-        print(f"[DEBUG] VLM 使用 API Key: {api_key[:30]}...")
+        print(f"[DEBUG] VLM 凭据已配置: {bool(api_key)}")
         print(f"[DEBUG] VLM 请求 URL: {self.cfg.vlm_api_url}")
         print(f"[DEBUG] VLM 轮次消息数: {len(messages)}")
         headers = {
@@ -1323,9 +1380,11 @@ class VLMAnalyzer:
         payload = {
             "model": self.cfg.vlm_model,
             "messages": messages,
-            "max_tokens": max_tokens,
+            "max_tokens": min(max_tokens, 3072),
             "temperature": 0.3,
         }
+        if self.cfg.vlm_model.startswith("doubao-seed"):
+            payload["thinking"] = {"type": self.cfg.vlm_thinking_mode}
         session = get_session_with_ssl_bypass()
         response = session.post(
             self.cfg.vlm_api_url,
@@ -1520,12 +1579,19 @@ class VLMAnalyzer:
             "给出废钢堆几何中心，以及从该中心展开、落在废钢外边缘（不是墙壁）的四个角落。"
             "四个点尽量构成以几何中心为对角线中点的四边形，并尽量盖住整堆废钢。"
             "坐标为归一化比例，x=0左缘，x=1右缘，y=0上缘，y=1下缘。不要使用像素值。\n"
+            "3. scene_context：观察本张真实背景的lighting光源/阴影/高光、tone局部色温和饱和度、contrast明暗和反射、"
+            "capture_style监控锐度/噪声、surface_condition邻近钢件旧化程度、support_and_occlusion可承重钢件与可遮挡边缘。"
+            "不确定光源方向时明确写不确定，不伪造物理测量。\n"
+            "4. placement_xy：选一个能落在钢板/型钢支点上且能被现有前景钢件遮住部分轮廓的堆内位置，"
+            "避开墙壁、时间戳、机位文字和完整展示式堆顶摆放，给归一化[x,y]。\n"
             "输出JSON："
             "{\"reply\":\"说明\","
             "\"center\":{\"x\":0.0,\"y\":0.0},"
             "\"corners\":["
             "{\"x\":0.0,\"y\":0.0},{\"x\":0.0,\"y\":0.0},"
-            "{\"x\":0.0,\"y\":0.0},{\"x\":0.0,\"y\":0.0}]}"
+            "{\"x\":0.0,\"y\":0.0},{\"x\":0.0,\"y\":0.0}],"
+            "\"placement_xy\":[0.5,0.5],\"scene_context\":{\"lighting\":\"观察\",\"tone\":\"观察\","
+            "\"contrast\":\"观察\",\"capture_style\":\"观察\",\"surface_condition\":\"观察\",\"support_and_occlusion\":\"观察\"}}"
         )
         return self._call_vlm(
             system_prompt=(
@@ -1558,9 +1624,11 @@ class VLMAnalyzer:
             f"朝向：{orientation_hint}\n"
             f"{score_notes}\n"
             f"场景参考，不要照抄里面的旧尺寸数字：{scene_hint}\n\n"
+            + scene_context_prompt(getattr(self.cfg, "active_scene_context", None)) + "\n"
             "请写一条交给生图模型的中文 generation_prompt。\n"
             "生图模型只能看到这条提示词，看不到尺寸历程。\n"
-            "生图模型除背景画布外还会看到该类多视角参考图，generation_prompt 必须写明：参考图只认外形、颜色和零件，禁止抠图、贴图、插入或原样拷贝进废钢场景。\n"
+            "生图模型除背景画布外还会看到该件六视图，参考图只认几何和零件，不继承新品光泽、鲜艳漆面、摄影棚光照或干净标签。"
+            "必须写成明确报废旧件，按原场景的光线、色调和成像风格重建材质，并交代实际支点、贴合接触阴影、前景钢件穿过部分轮廓的遮挡关系。\n"
             "结构尺寸必须使用【本轮设定尺寸】里的真实厘米和直径/高度，不要把筒径、握把、杆径缩成几厘米的模型。\n"
             "本轮可见最长边的厘米和百分比也不要改。\n"
             "不要写上一轮、测得、历程、返回尺寸、得分，也不要写更早轮次的百分比。\n"
@@ -1595,6 +1663,7 @@ class VLMAnalyzer:
         target_ratio: Optional[float] = None,
         size_spec: Optional[Dict[str, Any]] = None,
         size_rounds: Optional[List[Dict[str, Any]]] = None,
+        background_path: Optional[Path] = None,
     ) -> Dict[str, Any]:
         """
         VLM 评估生成的图片。长边约 1280，便于看 3% 级可见段和整图锐度。
@@ -1644,17 +1713,42 @@ class VLMAnalyzer:
             "\"fusion_quality\": \"very bad|bad|ok|good|very good\"}"
         )
 
+        profile = getattr(self.cfg, "active_object_profile", None)
+        if profile and profile["category"] == object_class:
+            user_prompt = per_item_evaluation_prompt(profile, spec, history_text)
         eval_user_prompt = (
             "下面这张图是生图模型本轮的输出。请只根据这张生成图做评估，只输出JSON。\n\n"
             + user_prompt
         )
-        response = self._call_vlm_with_data_url(
-            system_prompt=self.cfg.vlm_evaluator_prompt,
-            user_prompt=eval_user_prompt,
-            image_data_url=compressed_data_url,
-            expect_json=True,
-            continue_session=True,
-        )
+        if profile and background_path:
+            eval_user_prompt = (
+                "第1张为原监控背景，第2张为当前生成结果。必须对照两张图检查场景适配与背景保持，"
+                "所有位置和占比只以第2张完整画幅为准。不要根据提示词声称要求已实现，也不要猜测合成目标占比。\n"
+                + f"当前物品：{appearance_neutral_name(profile)}。\n几何身份线索：" + "；".join(geometry_identity(profile))
+                + "\n材质旧化要求：" + profile["weathering_prompt"]
+                + "\n请独立定位物品最大的连续可见片段，返回visible_bbox_xyxy=[x1,y1,x2,y2]，均为0–1归一化坐标。"
+                "不能把被遮住的部位补进框内，不能把分开的两个露出片段之间的隐藏部分计入；没有目标返回null。"
+                "visible_ratio依据图像观察给出，尺寸范围由程序后续比较，不向你提供目标数值。"
+                "给tone_score、overall_score、sharpness、confidence、reason、improvement_suggestion、quality_score、fusion_quality，"
+                "以及具体修正建议；不要求清晰读取旧标签。\n"
+                + review_requirements()
+                + "\n" + scene_context_prompt(getattr(self.cfg, "active_scene_context", None))
+            )
+            response = self._call_vlm(
+                system_prompt=self.cfg.vlm_evaluator_prompt,
+                user_prompt=eval_user_prompt,
+                images=[background_path, generated_image_path],
+                expect_json=True,
+                continue_session=False,
+            )
+        else:
+            response = self._call_vlm_with_data_url(
+                system_prompt=self.cfg.vlm_evaluator_prompt,
+                user_prompt=eval_user_prompt,
+                image_data_url=compressed_data_url,
+                expect_json=True,
+                continue_session=True,
+            )
         if not isinstance(response, dict):
             response = self._get_default_evaluation()
             response["reason"] = "VLM 返回非JSON，使用默认评估"
@@ -1663,7 +1757,9 @@ class VLMAnalyzer:
         )
         for axis in SCORE_AXES:
             response[axis] = _score100(response.get(axis))
-        for fix_key in ("tone_fix", "size_fix", "overall_fix"):
+        for axis, value in fusion_quality_gate(response)["scores"].items():
+            response[axis] = value
+        for fix_key in ("tone_fix", "size_fix", "overall_fix", "weathering_fix", "lighting_fix", "occlusion_fix", "style_fix", "background_fix", "identity_fix"):
             response[fix_key] = sanitize_vlm_suggestion(response.get(fix_key, ""))
         try:
             visible = response.get("visible_ratio")
@@ -1674,6 +1770,31 @@ class VLMAnalyzer:
         if sharpness_label not in {"sharp", "ok", "soft"}:
             sharpness_label = "ok"
         response["sharpness"] = sharpness_label
+        if profile and background_path:
+            bbox = response.get("visible_bbox_xyxy")
+            observed = None
+            if isinstance(bbox, list) and len(bbox) == 4:
+                try:
+                    x1, y1, x2, y2 = map(float, bbox)
+                    if 0 <= x1 < x2 <= 1 and 0 <= y1 < y2 <= 1:
+                        with Image.open(generated_image_path) as source:
+                            width, height = source.size
+                        observed = math.hypot(x2-x1, (y2-y1)*height/width)
+                except (TypeError, ValueError):
+                    pass
+            response["visible_ratio"] = observed
+            response["ratio_evidence"] = "diagonal_of_vlm_inferred_visible_component_bbox_not_segmentation_or_physical_measurement"
+            low, high = spec["scale_min"], spec["scale_max"]
+            if observed is None:
+                response["size_judgment"] = "unknown"
+                response["size_score"] = 0.0
+            elif low <= observed <= high:
+                response["size_judgment"] = "acceptable"
+                response["size_score"] = 90.0
+            else:
+                response["size_judgment"] = "too_small" if observed < low else "too_large"
+                response["size_score"] = 60.0
+                response["size_fix"] = "保持实体尺度与零件比例，通过前景宽钢件遮挡调整最大连续可见片段，不能把整件缩成模型。"
         return response
     
     def optimize_prompt(
@@ -1766,9 +1887,26 @@ class VLMAnalyzer:
         except Exception as e:
             print(f"  [VLM] 首轮对话失败: {e}")
         geometry = geometry_from_vlm_reply(opening)
+        scene_context = opening.get("scene_context")
+        self.cfg.active_scene_context = scene_context if isinstance(scene_context, dict) else None
         self.optimization_history.append({"stage": "opening", "data": opening})
 
         position_sample = sample_foreign_object_position(geometry)
+        placement = opening.get("placement_xy")
+        if isinstance(placement, list) and len(placement) == 2:
+            try:
+                px, py = map(float, placement)
+                if 0.04 <= px <= 0.96 and 0.10 <= py <= 0.84:
+                    position_sample["sampled_xy"] = [px, py]
+                    position_sample["description"] = (
+                        f"使用本张背景中建议的钢件支撑区，中心约水平{px:.1%}、垂直{py:.1%}；"
+                        "物品嵌在已有前景钢件之后，避免完整摆放在堆顶。"
+                    )
+                    position_sample["selection_method"] = "vlm_support_and_occlusion_hint"
+            except (TypeError, ValueError):
+                pass
+        self.cfg.active_edit_region = None
+        self.cfg.active_position_xy = position_sample["sampled_xy"]
         orientation_sample = sample_object_pose(object_class)
         position_hint = position_sample["description"]
         orientation_hint = orientation_sample["description"]
@@ -1826,6 +1964,7 @@ class VLMAnalyzer:
                 spec["target_ratio"],
                 size_spec=spec,
                 size_rounds=size_rounds,
+                background_path=background_path,
             )
             
             size_judgment = evaluation.get("size_judgment", "acceptable")
@@ -1837,6 +1976,9 @@ class VLMAnalyzer:
             scores = score_triplet(evaluation)
             mean_score = average_score(evaluation)
             passed = scores_pass(evaluation)
+            gate = fusion_quality_gate(evaluation) if self.cfg.active_object_profile else None
+            if gate is not None:
+                passed = passed and gate["passed"] and size_judgment == "acceptable"
             
             final_confidence = confidence
             final_quality_score = quality_score
@@ -1857,6 +1999,7 @@ class VLMAnalyzer:
                 "overall_score": scores["overall_score"],
                 "average_score": mean_score,
                 "passed": passed,
+                "fusion_gate": gate,
                 "image_path": str(generated_path),
             }
             judgment_history.append(judgment_record)
@@ -1868,6 +2011,9 @@ class VLMAnalyzer:
                 "api_result": api_result,
                 "average_score": mean_score,
                 "passed": passed,
+                "fusion_gate": gate,
+                "evaluation": evaluation,
+                "edit_region": self.cfg.active_edit_region,
             })
             
             if len(judgment_history) >= 2:
@@ -1923,7 +2069,7 @@ class VLMAnalyzer:
             )
             
             if passed:
-                print(f"  [VLM] ✅ 色调、大小、整体都高于{PASS_SCORE:.0f}，采用第{round_num}轮")
+                print(f"  [VLM] ✅ 尺寸与场景融合复核通过，采用第{round_num}轮；仍需人工看图")
                 selected_reason = "all_above_85"
                 success = True
                 if self.prompt_analyzer and image_id:
@@ -1936,7 +2082,8 @@ class VLMAnalyzer:
                         quality_score=final_quality_score,
                         fusion_quality=final_fusion_quality,
                         round_num=round_num,
-                        full_prompt=last_full_prompt
+                        full_prompt=last_full_prompt,
+                        fusion_passed=passed,
                     )
                 break
             
@@ -1946,6 +2093,12 @@ class VLMAnalyzer:
                 f"色调修正：{evaluation.get('tone_fix', '')}\n"
                 f"大小修正：{evaluation.get('size_fix', '')}\n"
                 f"整体修正：{evaluation.get('overall_fix', '')}\n"
+                f"旧化修正：{evaluation.get('weathering_fix', '')}\n"
+                f"光照修正：{evaluation.get('lighting_fix', '')}\n"
+                f"遮挡接触修正：{evaluation.get('occlusion_fix', '')}\n"
+                f"风格修正：{evaluation.get('style_fix', '')}\n"
+                f"背景修正：{evaluation.get('background_fix', '')}\n"
+                f"身份修正：{evaluation.get('identity_fix', '')}\n"
                 "写给生图模型的提示词不要出现分数，也不要写上一轮，只把这三项修正写成这一轮的画面要求。"
             )
             size_state["ratio"] = next_ratio
@@ -1960,15 +2113,24 @@ class VLMAnalyzer:
                 "size_brief": next_spec["size_brief"],
             })
         
-        selected_reason = "all_above_85" if success else "best_average"
+        selected_reason = "size_and_fusion_above_85" if success else "best_fusion_candidate_unaccepted"
         selected_round = round_candidates[-1]["round"] if success and round_candidates else None
         if not success and round_candidates:
-            best = max(round_candidates, key=lambda item: item["average_score"])
+            best = max(round_candidates, key=lambda item: (
+                (item.get("fusion_gate") or {}).get("minimum_score", item["average_score"]),
+                item["average_score"],
+            ))
             selected_round = best["round"]
             last_image_path = best["path"]
             prompt_for_image = best["prompt"]
             last_full_prompt = best["full_prompt"]
             last_api_result = best["api_result"]
+            self.cfg.active_edit_region = best.get("edit_region")
+            selected_evaluation = best["evaluation"]
+            final_confidence = selected_evaluation.get("confidence", 0.0)
+            final_quality_score = selected_evaluation.get("quality_score", 0.0)
+            final_fusion_quality = selected_evaluation.get("fusion_quality", "unknown")
+            final_size_judgment = selected_evaluation.get("size_judgment", "unknown")
             print(
                 f"  [VLM] 没有一轮三项都高于{PASS_SCORE:.0f}，"
                 f"采用第{best['round']}轮，平均分{best['average_score']:.1f}"
@@ -1985,7 +2147,8 @@ class VLMAnalyzer:
                     quality_score=final_quality_score,
                     fusion_quality=final_fusion_quality,
                     round_num=self.cfg.max_optimization_rounds,
-                    full_prompt=last_full_prompt
+                    full_prompt=last_full_prompt,
+                    fusion_passed=False,
                 )
         return {
             "final_prompt": prompt_for_image,
@@ -2002,6 +2165,10 @@ class VLMAnalyzer:
             "size_rounds": size_rounds,
             "selected_round": selected_round,
             "selected_reason": selected_reason,
+            "fusion_gate": next((item.get("fusion_gate") for item in round_candidates if item["round"] == selected_round), None),
+            "selected_evaluation": next((item.get("evaluation") for item in round_candidates if item["round"] == selected_round), None),
+            "scene_context": self.cfg.active_scene_context,
+            "edit_region_xyxy": self.cfg.active_edit_region,
         }
     
     def generate_initial_prompt(
@@ -2096,11 +2263,13 @@ class VLMAnalyzer:
 # ============ 工具函数 ============
 
 def image_to_data_url_vlm(path: Path) -> str:
-    mime_map = {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png", ".webp": "image/webp"}
-    mime = mime_map.get(path.suffix.lower(), "image/png")
-    with open(path, "rb") as f:
-        encoded = base64.b64encode(f.read()).decode("utf-8")
-    return f"data:{mime};base64,{encoded}"
+    import io
+    with Image.open(path) as source:
+        image = source.convert("RGB")
+        image.thumbnail((1600, 1600), Image.Resampling.LANCZOS)
+        buffer = io.BytesIO()
+        image.save(buffer, format="JPEG", quality=88)
+    return "data:image/jpeg;base64," + base64.b64encode(buffer.getvalue()).decode("utf-8")
 
 
 def load_yaml_config(path: Path) -> Dict[str, Any]:
@@ -2247,6 +2416,15 @@ def build_prompt(
     cfg: Optional[AppConfig] = None,
     target_ratio: Optional[float] = None,
 ) -> str:
+    profile = getattr(cfg, "active_object_profile", None) if cfg is not None else None
+    if profile and profile["category"] == object_class:
+        return render_per_item_prompt(
+            profile, target_ratio=target_ratio, position_hint=position_hint,
+            orientation_hint=orientation_hint, feedback=prompt or "",
+            scene_context=getattr(cfg, "active_scene_context", None),
+            edit_region_xyxy=getattr(cfg, "active_edit_region", None),
+            reference_kind=getattr(cfg, "active_reference_kind", "six_view_atlas"),
+        )
     if "【本轮设定尺寸】" in (prompt or ""):
         size_info = "尺寸只按提示词里的【本轮设定尺寸】绘制：结构用真实厘米，可见最长边用本轮厘米，不要把筒径再缩小，不要参考更早轮次"
     elif background_path:
@@ -2369,7 +2547,7 @@ def build_request_payload(image_paths: List[Path], prompt: str, cfg: AppConfig) 
     if cfg.image_protocol == "ali_wan":
         content: List[Dict[str, str]] = [{"text": prompt}]
         content.extend({"image": data_url} for data_url in images)
-        return {
+        payload = {
             "model": cfg.model,
             "input": {
                 "messages": [
@@ -2385,6 +2563,12 @@ def build_request_payload(image_paths: List[Path], prompt: str, cfg: AppConfig) 
                 "watermark": cfg.watermark,
             },
         }
+        region = getattr(cfg, "active_edit_region", None)
+        if getattr(cfg, "use_interactive_edit_region", True) and region and images:
+            x1, y1, x2, y2 = region
+            bbox = [round(x1 * final_w), round(y1 * final_h), round(x2 * final_w), round(y2 * final_h)]
+            payload["parameters"]["bbox_list"] = [[bbox], *[[] for _ in images[1:]]]
+        return payload
 
     if cfg.image_protocol == "huoshan_seedream":
         payload: Dict[str, Any] = {
@@ -2403,7 +2587,7 @@ def build_request_payload(image_paths: List[Path], prompt: str, cfg: AppConfig) 
     raise ValueError(f"未知图像协议: {cfg.image_protocol}")
 
 
-def generation_role_prompt(prompt: str, view_count: int = 0) -> str:
+def generation_role_prompt(prompt: str, view_count: int = 0, references_weathered: bool = False, reference_kind: str = "six_view_atlas") -> str:
     """单次调用的文字：只把原始背景当画布；多视图只认外形，禁止当贴图。"""
     lines = [
         "第1张图是最初的废钢监控原图，只作为画布。必须在这张图上新增异物。",
@@ -2414,7 +2598,14 @@ def generation_role_prompt(prompt: str, view_count: int = 0) -> str:
     if view_count > 0:
         lines.extend(
             [
-                f"后面 {view_count} 张是异物的多视角参考图，只用来认形状、颜色、零件和比例。",
+                (
+                    f"后面 {view_count} 张是用户提供的生锈六视图，参考几何、零件及既有锈蚀；六格为同一件的六个视角，输出只增加一件。按第1张背景重建光照和接触遮挡，保留旧化，不复制白底或格线。"
+                    if reference_kind == "weathered_six_view_atlas" else
+                    f"后面 {view_count} 张是已生成的废旧状态物品身份参考，只参考几何、零件和旧化材质；必须在第1张原背景内重新画出同一件。"
+                    if references_weathered else
+                    f"后面 {view_count} 张仅用于辨认该件几何、零件和比例；图中是新品参考，输出必须重新生成已明显旧化的报废状态。"
+                ),
+                "不得继承参考图的鲜亮漆面、干净金属面、摄影棚高光、独立白平衡、锐度和标签清晰度；当前监控背景决定外观。",
                 "禁止把参考图里的物体直接抠图、贴图、插入、叠加或原样拷贝进第1张场景。",
                 "禁止保留白底、摄影棚、宫格分割线，以及前、后、左、右、上、下这类视角标签。",
                 "必须按本轮设定尺寸，在废钢堆里重新画出一件被埋住的同类异物，光影和锈蚀跟车斗一致。",
@@ -2434,7 +2625,8 @@ def generate_single_call(
     """每轮把原始背景当画布；可选附带多视图参考。不把上一轮生成图再输入。"""
     del previous_path
     refs = [p for p in (reference_paths or []) if p and p.is_file()]
-    labeled = generation_role_prompt(prompt, view_count=len(refs))
+    aged_reference = getattr(cfg, "active_weathered_reference", None)
+    labeled = generation_role_prompt(prompt, view_count=len(refs), references_weathered=bool(aged_reference and aged_reference in refs), reference_kind=cfg.active_reference_kind)
     image_paths = [background_path, *refs]
     print(f"  [生图] 单次调用，输入 {len(image_paths)} 张图（1张背景画布 + {len(refs)} 张多视图参考）")
     for idx, path in enumerate(refs, start=2):
@@ -2443,13 +2635,79 @@ def generate_single_call(
     return call_image_api(payload, cfg), labeled
 
 
+def prepare_scene_weathered_reference(
+    cfg: AppConfig, reference_path: Path, background_path: Path
+) -> Path:
+    """Generate and refine an aged reference; each stage is a recorded API request."""
+    profile = cfg.active_object_profile
+    if not profile or not cfg.prepare_weathered_reference:
+        return reference_path
+    if cfg.active_weathered_reference and cfg.active_weathered_reference.is_file():
+        return cfg.active_weathered_reference
+    prompt = (
+        "把输入图中的同一物品重新生成成明确的长期报废旧件。此次只输出一件完整的旧化物品身份参考，"
+        "采用灰褐色无纹理哑光背景；不生成废钢场景、不输出六格、文字或尺寸线。\n"
+        f"目标：{appearance_neutral_name(profile)}。必须保留的几何：" + "；".join(geometry_identity(profile)) + "。\n"
+        "必须实际改变可见材质状态，不能继续输出原图的新品或只加少量装饰痕迹。\n"
+        + profile["weathering_prompt"] + "\n"
+        "对钢/铁主体，生成清楚的深褐不规则锈层、剥漆、灰尘和旧油泥；"
+        "原来鲜艳的红/蓝/绿只作少量暗淡残漆，不保留大面积亮漆；移除清晰广告字样，"
+        "无干净银白表面、镜面灯条和亮黑新品质感。铝、不锈钢、塑料及橡胶按上面的专属材质旧化，不强行画铁锈。\n"
+        "完整保留主体和安装端的数量、连接和比例；少量擦伤/磨损不能把原结构改成其它型号。"
+    )
+    old_region = cfg.active_edit_region
+    cfg.active_edit_region = None
+    directory = cfg.output_images_dir.parent / "weathered_references"
+    directory.mkdir(parents=True, exist_ok=True)
+    stages = []
+    current = reference_path
+    try:
+        for stage in range(1, max(1, min(3, cfg.weathered_reference_rounds)) + 1):
+            stage_prompt = prompt if stage == 1 else (
+                "对当前同一物品做进一步报废旧化，完整形体和连接不变。必须清除剩余亮漆、橙红大色块和干净反射，"
+                "以低饱和灰褐积尘、深褐旧氧化和旧油泥覆盖可见主体；"
+                "钢/铁可见主体约80–90%呈明显锈蚀/污垢，原漆只剩零散暗淡残片，此为合成外观目标。"
+                "铝、不锈钢、塑料和橡胶严格按下面专属旧化处理，不能画成铁锈。"
+                + profile["weathering_prompt"]
+                + "。只输出一件完整旧物的参考照片，平整灰褐背景；无其它钢件、无文字、无宫格、无摄影棚灯条反射。"
+            )
+            payload = build_request_payload([current], stage_prompt, cfg)
+            result = call_image_api(payload, cfg)
+            urls = extract_image_urls(result, cfg.image_protocol)
+            if not urls:
+                raise RuntimeError("旧化参考生成未返回图片")
+            stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+            path = directory / f"{profile['id']}_stage{stage}_{stamp}.{cfg.output_format}"
+            path.write_bytes(download_image(urls[0]))
+            stages.append({"stage": stage, "source": str(current), "output": str(path), "prompt": stage_prompt})
+            current = path
+    finally:
+        cfg.active_edit_region = old_region
+    path = current
+    cfg.active_weathered_reference = path
+    cfg.active_reference_kind = "weathered_single_view"
+    cfg.active_reference_preparation = {
+        "stage": "generated_discarded_state_reference",
+        "source_reference": str(reference_path),
+        "background_source": str(background_path),
+        "generated_reference": str(path),
+        "model": cfg.model,
+        "prompt": prompt,
+        "stages": stages,
+        "acceptance": "assessed_with_final_scene_not_assumed_from_filename",
+    }
+    save_json(path.with_suffix(".json"), cfg.active_reference_preparation)
+    print(f"  [旧化参考] 已生成 {path.name}；最终场景仍需视觉复核")
+    return path
+
+
 # ============================================================
 #  call_image_api
 # ============================================================
 
 def call_image_api(payload: Dict[str, Any], cfg: AppConfig) -> Dict[str, Any]:
     """按已绑定的图像地址和密钥发起请求。"""
-    print(f"[DEBUG] 图像生成使用 API Key: {cfg.image_api_key[:30]}...")
+    print(f"[DEBUG] 图像生成凭据已配置: {bool(cfg.image_api_key)}")
     print(f"[DEBUG] 使用模型: {cfg.model}")
     print(f"[DEBUG] 图像协议: {cfg.image_protocol}")
 
@@ -2650,10 +2908,10 @@ def load_app_config() -> AppConfig:
     print(f"[DEBUG] 图像模型: {bound['model']}")
     print(f"[DEBUG] 图像协议: {bound['image_protocol']}")
     print(f"[DEBUG] 图像端点: {bound['image_api_url']}")
-    print(f"[DEBUG] 图像 API Key: {bound['image_api_key'][:30]}...")
+    print(f"[DEBUG] 图像凭据已配置: {bool(bound['image_api_key'])}")
     print(f"[DEBUG] VLM 模型: {bound['vlm_model']}")
     print(f"[DEBUG] VLM 端点: {bound['vlm_api_url']}")
-    print(f"[DEBUG] VLM API Key: {bound['vlm_api_key'][:30]}...")
+    print(f"[DEBUG] VLM 凭据已配置: {bool(bound['vlm_api_key'])}")
 
     cfg = AppConfig(
         image_api_key=bound["image_api_key"],
@@ -2692,8 +2950,18 @@ def load_app_config() -> AppConfig:
         size_tolerance=raw_app.get("size_tolerance", raw.get("size_tolerance", "class_range")),
         feed_object_views=bool(raw_app.get("feed_object_views", raw.get("feed_object_views", True))),
         max_object_views=int(raw_app.get("max_object_views", raw.get("max_object_views", 3))),
-        six_views_dir=base_dir / raw.get("six_views_dir", "output/six_views"),
+        six_views_dir=base_dir / raw_app.get("six_views_dir", raw.get("six_views_dir", "output/six_views")),
+        use_interactive_edit_region=bool(raw_app.get("use_interactive_edit_region", True)),
+        vlm_thinking_mode=raw_app.get("vlm_thinking_mode", "disabled"),
+        prepare_weathered_reference=bool(raw_app.get("prepare_weathered_reference", True)),
+        weathered_reference_rounds=int(raw_app.get("weathered_reference_rounds", 2)),
     )
+    if raw_app.get("use_object_catalog", False):
+        cfg.object_catalog_path = base_dir / raw_app.get("object_catalog_path", "profiles/object_profiles.json")
+        cfg.object_catalog = load_per_item_catalog(cfg.object_catalog_path, cfg.six_views_dir)
+        background_catalog_path = base_dir / raw_app.get("background_catalog_path", "profiles/background_profiles.json")
+        cfg.background_catalog = json.loads(background_catalog_path.read_text(encoding="utf-8"))
+        print(f"[INFO] 已启用逐件目录：{len(cfg.object_catalog['objects'])} 张参考图，独立尺寸/prompt")
     print(f"[DEBUG] 已加载 {len(cfg.object_resize_scales)} 类物体真实缩放尺寸")
     print(f"[DEBUG] 已加载 {len(cfg.object_size_briefs)} 类物体结构尺寸")
     return cfg
@@ -2706,15 +2974,41 @@ def main() -> None:
     parser.add_argument("--total", type=int, default=None, help="总生成数量")
     parser.add_argument("--seed", type=int, default=None, help="随机种子")
     parser.add_argument("--no-vlm", action="store_true", help="禁用VLM优化，使用传统模式")
+    parser.add_argument("--with-vlm", action="store_true", help="本次运行启用背景分析与生成结果复核")
     parser.add_argument("--max-rounds", type=int, default=None, help="最大优化轮数")
     parser.add_argument("--backgrounds", type=str, nargs="+", help="指定背景图片路径或文件名")
-    parser.add_argument("--objects", type=str, nargs="+", help="指定异物图片路径或文件名（可多张，生成时从中加权选取）")
+    parser.add_argument("--objects", type=str, nargs="+", help="指定物品 ID（S01–S38）、图片路径或文件名；多件时加权选取")
     parser.add_argument("--random", action="store_true", help="随机选取背景图（默认顺序遍历）")
     parser.add_argument("--analyze-only", action="store_true", help="仅分析已有的Prompt数据，不生成")
     parser.add_argument("--model", type=str, default=None, help="覆盖生图模型，例如 wan2.7-image 或 doubao-seedream-5.0-lite")
+    parser.add_argument("--output-root", type=Path, default=None, help="本次运行的独立结果目录")
+    parser.add_argument("--rust-reference", type=Path, default=None, help="指定当前单件物品的现成生锈六视图，直接融合")
     args = parser.parse_args()
 
     cfg = load_app_config()
+    supplied_rust_reference = None
+    if args.rust_reference:
+        supplied_rust_reference = args.rust_reference.expanduser().resolve()
+        if not supplied_rust_reference.is_file() or supplied_rust_reference.suffix.lower() not in IMAGE_EXTS:
+            parser.error("生锈六视图文件不存在或格式不支持")
+        if not args.objects or len(args.objects) != 1 or not cfg.object_catalog:
+            parser.error("rust-reference 需与一个物品 ID 配合使用")
+        cfg.prepare_weathered_reference = False
+    if args.with_vlm and args.no_vlm:
+        parser.error("with-vlm 和 no-vlm 不能同时使用")
+    if args.with_vlm:
+        cfg.enable_vlm_optimization = True
+    if args.output_root:
+        run_root = args.output_root.expanduser().resolve()
+        for field_name, folder in (
+            ("output_images_dir", "images"),
+            ("output_final_images_dir", "final_images"),
+            ("output_metadata_dir", "metadata"),
+            ("output_failed_dir", "failed"),
+            ("output_bbox_dir", "bbox"),
+            ("output_analysis_dir", "analysis"),
+        ):
+            setattr(cfg, field_name, run_root / folder)
 
     if args.model:
         bound = bind_by_model(load_bailian_raw(), args.model, cfg.vlm_model)
@@ -2793,7 +3087,10 @@ def main() -> None:
             selected_backgrounds = backgrounds[:total_to_process]
         print(f"📁 顺序处理 {len(selected_backgrounds)} 张背景图")
 
-    object_items = get_all_object_images_with_classes(cfg.objects_dir, prompt_templates)
+    object_items = (
+        per_item_catalog_items(cfg.object_catalog) if cfg.object_catalog
+        else get_all_object_images_with_classes(cfg.objects_dir, prompt_templates)
+    )
     if not object_items:
         raise FileNotFoundError(f"No object images found in {cfg.objects_dir}")
     catalog_items = list(object_items)
@@ -2805,8 +3102,12 @@ def main() -> None:
             if str(item["path"]) in specified
             or item["path"].name in specified
             or item["filename"] in specified
+            or item.get("profile_id") in specified
+            or (item.get("profile") or {}).get("original_filename") in specified
         ]
         if not matched:
+            if cfg.object_catalog:
+                raise ValueError("指定物品不在逐件目录中；使用S01–S38或准确六视图文件名")
             print(f"Warning: 未找到指定异物 {args.objects}，改用全部异物图")
         else:
             object_items = matched
@@ -2841,13 +3142,40 @@ def main() -> None:
         
         object_class = selected_item["class"]
         object_path = selected_item["path"]
+        cfg.active_object_profile = selected_item.get("profile")
+        cfg.active_scene_context = None
+        cfg.active_edit_region = None
+        cfg.active_position_xy = None
+        cfg.active_weathered_reference = None
+        cfg.active_reference_kind = "six_view_atlas"
+        cfg.active_reference_preparation = None
+        if supplied_rust_reference:
+            import hashlib
+            object_path = supplied_rust_reference
+            cfg.active_object_profile = dict(cfg.active_object_profile)
+            cfg.active_reference_kind = "weathered_six_view_atlas"
+            cfg.active_weathered_reference = object_path
+            cfg.active_reference_preparation = {
+                "stage": "user_supplied_weathered_six_view_atlas",
+                "source_reference": str(object_path),
+                "sha256": hashlib.sha256(object_path.read_bytes()).hexdigest(),
+                "reference_generation_calls": 0,
+            }
+            cfg.active_object_profile["prompt"] = render_per_item_prompt(
+                cfg.active_object_profile, reference_kind=cfg.active_reference_kind,
+            )
+        cfg.active_background_profile = next(
+            (item for item in (cfg.background_catalog or {}).get("backgrounds", []) if item["filename"] == background_path.name), None
+        )
+        if cfg.active_object_profile:
+            cfg.vlm_evaluator_prompt = per_item_evaluator_prompt(cfg.active_object_profile)
         view_paths: List[Path] = []
         size_data = calculate_optimal_size(background_path, object_class, cfg)
         size_state = {"ratio": size_data["target_ratio"]}
         print(f"  [物体] 选择: {object_path.name} (类别: {object_class}, 权重: {selected_item['weight']})")
         print(f"  [尺寸] {size_data['description']}")
         if cfg.feed_object_views:
-            view_paths = collect_object_views(
+            view_paths = [object_path] if supplied_rust_reference else collect_object_views(
                 object_path,
                 object_class,
                 catalog_items,
@@ -2859,7 +3187,10 @@ def main() -> None:
                 f"{[p.name for p in view_paths]}"
             )
         
-        base_prompt = random.choice(prompt_templates[object_class])
+        base_prompt = (
+            cfg.active_object_profile["prompt"] if cfg.active_object_profile
+            else random.choice(prompt_templates[object_class])
+        )
         
         timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
         image_id = f"{bg_idx:06d}_{background_path.stem}_{object_class}_{cfg.model}_{timestamp}"
@@ -2892,6 +3223,19 @@ def main() -> None:
                     orientation_hint: str,
                     cls: str = object_class,
                 ):
+                    current_references = view_paths
+                    if cfg.active_object_profile and cfg.prepare_weathered_reference:
+                        aged_reference = prepare_scene_weathered_reference(cfg, object_path, background_path)
+                        current_references = [aged_reference]
+                    if cfg.active_object_profile:
+                        with Image.open(background_path) as source:
+                            canvas_size = source.size
+                        policy = cfg.active_object_profile["size_policy"]
+                        cfg.active_edit_region = fusion_edit_region(
+                            cfg.active_position_xy or [0.5, 0.55],
+                            size_state["ratio"], canvas_size,
+                            policy["cross_mm"] / policy["reference_length_mm"],
+                        )
                     round_prompt = build_prompt(
                         cls, prompt, negative_prompt,
                         background_path=background_path,
@@ -2905,7 +3249,7 @@ def main() -> None:
                         background_path,
                         round_prompt,
                         previous_path,
-                        reference_paths=view_paths,
+                        reference_paths=current_references,
                     )
                     urls = extract_image_urls(api_result, cfg.image_protocol)
                     image_bytes = download_image(urls[0])
@@ -2934,11 +3278,23 @@ def main() -> None:
                 vlm_analysis_json = outcome["opening"]
                 print(f"  [VLM] 优化结果: {'成功' if vlm_success else '达到最大轮数'}")
             else:
+                if cfg.active_object_profile and cfg.prepare_weathered_reference:
+                    aged_reference = prepare_scene_weathered_reference(cfg, object_path, background_path)
+                    view_paths = [aged_reference]
                 scrap_geometry = fallback_scrap_geometry()
                 position_sample = sample_foreign_object_position(scrap_geometry)
                 orientation_sample = sample_object_pose(object_class)
                 position_hint = position_sample["description"]
                 orientation_hint = orientation_sample["description"]
+                if cfg.active_object_profile:
+                    with Image.open(background_path) as source:
+                        canvas_size = source.size
+                    policy = cfg.active_object_profile["size_policy"]
+                    cfg.active_edit_region = fusion_edit_region(
+                        position_sample["sampled_xy"], size_state["ratio"], canvas_size,
+                        policy["cross_mm"] / policy["reference_length_mm"],
+                    )
+                    cfg.active_position_xy = position_sample["sampled_xy"]
                 print(
                     f"  [位置] 采样 ({position_sample['sampled_xy'][0]:.3f},"
                     f"{position_sample['sampled_xy'][1]:.3f}) "
@@ -2970,7 +3326,11 @@ def main() -> None:
                 raise RuntimeError("生图未产出图片")
 
             final_name = f"{image_id}.{cfg.output_format}"
-            final_path = cfg.output_final_images_dir / final_name
+            destination_dir = cfg.output_final_images_dir
+            if cfg.active_object_profile and not vlm_success:
+                destination_dir = cfg.output_final_images_dir.parent / "review_images"
+                destination_dir.mkdir(parents=True, exist_ok=True)
+            final_path = destination_dir / final_name
             final_path.write_bytes(last_image_path.read_bytes())
             saved_paths = [str(final_path)]
 
@@ -2981,6 +3341,11 @@ def main() -> None:
                 "object_image": str(object_path) if object_path else None,
                 "object_views": [str(p) for p in view_paths],
                 "object_class": object_class,
+                "object_profile_id": (cfg.active_object_profile or {}).get("id"),
+                "object_physical_name": (cfg.active_object_profile or {}).get("name"),
+                "working_dimensions_mm": (cfg.active_object_profile or {}).get("dimensions_mm"),
+                "dimension_evidence": (cfg.active_object_profile or {}).get("dimension_evidence"),
+                "background_calibration": cfg.active_background_profile,
                 "object_scale": {
                     "target_ratio": (
                         ((outcome or {}).get("size_rounds") or [{}])[-1].get("target_ratio", size_state["ratio"])
@@ -3012,7 +3377,14 @@ def main() -> None:
                 "size_rounds": (outcome or {}).get("size_rounds") if vlm_used else None,
                 "selected_round": (outcome or {}).get("selected_round") if vlm_used else None,
                 "selected_reason": (outcome or {}).get("selected_reason") if vlm_used else None,
-                "quality_status": "pending_review",
+                "scene_context": cfg.active_scene_context,
+                "reference_preparation": cfg.active_reference_preparation,
+                "fusion_reference_images": [str(cfg.active_weathered_reference)] if cfg.active_weathered_reference else [str(p) for p in view_paths],
+                "edit_region_xyxy": cfg.active_edit_region,
+                "fusion_gate": outcome.get("fusion_gate"),
+                "selected_evaluation": outcome.get("selected_evaluation"),
+                "fusion_pipeline_version": "1.1.0",
+                "quality_status": "vlm_passed_pending_human_review" if vlm_success else "unaccepted_requires_review",
                 "review_result": None,
                 "notes": f"Generated with {cfg.model} (HTTP), VLM: {cfg.vlm_model}",
                 "api_result": result,

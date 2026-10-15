@@ -1,0 +1,1763 @@
+{
+  "schema_version": "1.0",
+  "version": "1.1.0",
+  "groups": {
+    "2026_08_06_36_1_zhongfei1_95_zhongfei2_5": 5,
+    "2026_08_06_36_6_jianliao1_50_houjian_18#33_zhongfei3_15_zhongfei2_8#33_jianliao2_8#33": 55,
+    "2026_08_06_53_4_zhongfei1_70_zhongfei2_20_medium_10": 13
+  },
+  "backgrounds": [
+    {
+      "filename": "2026_08_06_36_1_zhongfei1_95_zhongfei2_5_19.jpg",
+      "sha256": "91dc02b70ca851caceef765e5b2f46f8ead3a7784aa474d7d1b71f52337b624e",
+      "width": 3840,
+      "height": 2160,
+      "filename_group": "2026_08_06_36_1_zhongfei1_95_zhongfei2_5",
+      "luma_mean_downsampled": 116.11,
+      "luma_std_downsampled": 53.53,
+      "assumed_scene_width_mm": 2400,
+      "calibration_status": "unmeasured_assumption",
+      "suggested_pile_roi_xywh": [
+        0.16,
+        0.22,
+        0.68,
+        0.56
+      ],
+      "roi_status": "generic_hint_requires_per_image_confirmation_not_mask",
+      "preserve_regions": [
+        "上部时间戳",
+        "底部机位标识",
+        "料斗边框"
+      ],
+      "lighting_policy": "按本张原图推断；不预设所有图共用固定主光方向"
+    },
+    {
+      "filename": "2026_08_06_36_1_zhongfei1_95_zhongfei2_5_47.jpg",
+      "sha256": "6bf14ee45f19918617dd12c37888c56a1d2d868a15106b9d42058e210886d5af",
+      "width": 3840,
+      "height": 2160,
+      "filename_group": "2026_08_06_36_1_zhongfei1_95_zhongfei2_5",
+      "luma_mean_downsampled": 116.11,
+      "luma_std_downsampled": 60.43,
+      "assumed_scene_width_mm": 2400,
+      "calibration_status": "unmeasured_assumption",
+      "suggested_pile_roi_xywh": [
+        0.16,
+        0.22,
+        0.68,
+        0.56
+      ],
+      "roi_status": "generic_hint_requires_per_image_confirmation_not_mask",
+      "preserve_regions": [
+        "上部时间戳",
+        "底部机位标识",
+        "料斗边框"
+      ],
+      "lighting_policy": "按本张原图推断；不预设所有图共用固定主光方向"
+    },
+    {
+      "filename": "2026_08_06_36_1_zhongfei1_95_zhongfei2_5_48.jpg",
+      "sha256": "9b4c7d57a6d4ece25e00f9860a056cd20fecfb9443223208656aa088e528ef9e",
+      "width": 3840,
+      "height": 2160,
+      "filename_group": "2026_08_06_36_1_zhongfei1_95_zhongfei2_5",
+      "luma_mean_downsampled": 109.94,
+      "luma_std_downsampled": 61.82,
+      "assumed_scene_width_mm": 2400,
+      "calibration_status": "unmeasured_assumption",
+      "suggested_pile_roi_xywh": [
+        0.16,
+        0.22,
+        0.68,
+        0.56
+      ],
+      "roi_status": "generic_hint_requires_per_image_confirmation_not_mask",
+      "preserve_regions": [
+        "上部时间戳",
+        "底部机位标识",
+        "料斗边框"
+      ],
+      "lighting_policy": "按本张原图推断；不预设所有图共用固定主光方向"
+    },
+    {
+      "filename": "2026_08_06_36_1_zhongfei1_95_zhongfei2_5_51.jpg",
+      "sha256": "fd7ffbcdb17f67371284a66a75d97e7601725748eaf7d2258ab841054c42029c",
+      "width": 3840,
+      "height": 2160,
+      "filename_group": "2026_08_06_36_1_zhongfei1_95_zhongfei2_5",
+      "luma_mean_downsampled": 119.73,
+      "luma_std_downsampled": 56.78,
+      "assumed_scene_width_mm": 2400,
+      "calibration_status": "unmeasured_assumption",
+      "suggested_pile_roi_xywh": [
+        0.16,
+        0.22,
+        0.68,
+        0.56
+      ],
+      "roi_status": "generic_hint_requires_per_image_confirmation_not_mask",
+      "preserve_regions": [
+        "上部时间戳",
+        "底部机位标识",
+        "料斗边框"
+      ],
+      "lighting_policy": "按本张原图推断；不预设所有图共用固定主光方向"
+    },
+    {
+      "filename": "2026_08_06_36_1_zhongfei1_95_zhongfei2_5_55.jpg",
+      "sha256": "6724fad56ab9c7d4311fe51eaf6beb5c3f4b24833dd6fb79283ebbe83b15e524",
+      "width": 3840,
+      "height": 2160,
+      "filename_group": "2026_08_06_36_1_zhongfei1_95_zhongfei2_5",
+      "luma_mean_downsampled": 118.03,
+      "luma_std_downsampled": 60.87,
+      "assumed_scene_width_mm": 2400,
+      "calibration_status": "unmeasured_assumption",
+      "suggested_pile_roi_xywh": [
+        0.16,
+        0.22,
+        0.68,
+        0.56
+      ],
+      "roi_status": "generic_hint_requires_per_image_confirmation_not_mask",
+      "preserve_regions": [
+        "上部时间戳",
+        "底部机位标识",
+        "料斗边框"
+      ],
+      "lighting_policy": "按本张原图推断；不预设所有图共用固定主光方向"
+    },
+    {
+      "filename": "2026_08_06_36_6_jianliao1_50_houjian_18#33_zhongfei3_15_zhongfei2_8#33_jianliao2_8#33_10.jpg",
+      "sha256": "0990cfc15ab1e6c7ab85c85a2ce41ed0a69c6a2be92dc8d7ccb1c53b3aa889c3",
+      "width": 3840,
+      "height": 2160,
+      "filename_group": "2026_08_06_36_6_jianliao1_50_houjian_18#33_zhongfei3_15_zhongfei2_8#33_jianliao2_8#33",
+      "luma_mean_downsampled": 111.3,
+      "luma_std_downsampled": 57.59,
+      "assumed_scene_width_mm": 2400,
+      "calibration_status": "unmeasured_assumption",
+      "suggested_pile_roi_xywh": [
+        0.16,
+        0.22,
+        0.68,
+        0.56
+      ],
+      "roi_status": "generic_hint_requires_per_image_confirmation_not_mask",
+      "preserve_regions": [
+        "上部时间戳",
+        "底部机位标识",
+        "料斗边框"
+      ],
+      "lighting_policy": "按本张原图推断；不预设所有图共用固定主光方向"
+    },
+    {
+      "filename": "2026_08_06_36_6_jianliao1_50_houjian_18#33_zhongfei3_15_zhongfei2_8#33_jianliao2_8#33_11.jpg",
+      "sha256": "22202aebfc4d72813c5b7ae47dbf65d6329da2de643ffc9edb2bf8aa0a4c76a0",
+      "width": 3840,
+      "height": 2160,
+      "filename_group": "2026_08_06_36_6_jianliao1_50_houjian_18#33_zhongfei3_15_zhongfei2_8#33_jianliao2_8#33",
+      "luma_mean_downsampled": 110.8,
+      "luma_std_downsampled": 56.8,
+      "assumed_scene_width_mm": 2400,
+      "calibration_status": "unmeasured_assumption",
+      "suggested_pile_roi_xywh": [
+        0.16,
+        0.22,
+        0.68,
+        0.56
+      ],
+      "roi_status": "generic_hint_requires_per_image_confirmation_not_mask",
+      "preserve_regions": [
+        "上部时间戳",
+        "底部机位标识",
+        "料斗边框"
+      ],
+      "lighting_policy": "按本张原图推断；不预设所有图共用固定主光方向"
+    },
+    {
+      "filename": "2026_08_06_36_6_jianliao1_50_houjian_18#33_zhongfei3_15_zhongfei2_8#33_jianliao2_8#33_12.jpg",
+      "sha256": "59b97c96501b2c2766137c6a7cbe5c9ad3f70b233fb1f5f57f98d30af28fd78f",
+      "width": 3840,
+      "height": 2160,
+      "filename_group": "2026_08_06_36_6_jianliao1_50_houjian_18#33_zhongfei3_15_zhongfei2_8#33_jianliao2_8#33",
+      "luma_mean_downsampled": 111.84,
+      "luma_std_downsampled": 58.73,
+      "assumed_scene_width_mm": 2400,
+      "calibration_status": "unmeasured_assumption",
+      "suggested_pile_roi_xywh": [
+        0.16,
+        0.22,
+        0.68,
+        0.56
+      ],
+      "roi_status": "generic_hint_requires_per_image_confirmation_not_mask",
+      "preserve_regions": [
+        "上部时间戳",
+        "底部机位标识",
+        "料斗边框"
+      ],
+      "lighting_policy": "按本张原图推断；不预设所有图共用固定主光方向"
+    },
+    {
+      "filename": "2026_08_06_36_6_jianliao1_50_houjian_18#33_zhongfei3_15_zhongfei2_8#33_jianliao2_8#33_13.jpg",
+      "sha256": "8153ca3c87d5def342d3b58d4f0b3004e569212c5b1768316a345583b436f39c",
+      "width": 3840,
+      "height": 2160,
+      "filename_group": "2026_08_06_36_6_jianliao1_50_houjian_18#33_zhongfei3_15_zhongfei2_8#33_jianliao2_8#33",
+      "luma_mean_downsampled": 123.82,
+      "luma_std_downsampled": 53.06,
+      "assumed_scene_width_mm": 2400,
+      "calibration_status": "unmeasured_assumption",
+      "suggested_pile_roi_xywh": [
+        0.16,
+        0.22,
+        0.68,
+        0.56
+      ],
+      "roi_status": "generic_hint_requires_per_image_confirmation_not_mask",
+      "preserve_regions": [
+        "上部时间戳",
+        "底部机位标识",
+        "料斗边框"
+      ],
+      "lighting_policy": "按本张原图推断；不预设所有图共用固定主光方向"
+    },
+    {
+      "filename": "2026_08_06_36_6_jianliao1_50_houjian_18#33_zhongfei3_15_zhongfei2_8#33_jianliao2_8#33_15.jpg",
+      "sha256": "fe449a599f7724b1fb5707eaf9f107a61b1145e62748072b55ec67236aeca7bb",
+      "width": 3840,
+      "height": 2160,
+      "filename_group": "2026_08_06_36_6_jianliao1_50_houjian_18#33_zhongfei3_15_zhongfei2_8#33_jianliao2_8#33",
+      "luma_mean_downsampled": 110.78,
+      "luma_std_downsampled": 59.91,
+      "assumed_scene_width_mm": 2400,
+      "calibration_status": "unmeasured_assumption",
+      "suggested_pile_roi_xywh": [
+        0.16,
+        0.22,
+        0.68,
+        0.56
+      ],
+      "roi_status": "generic_hint_requires_per_image_confirmation_not_mask",
+      "preserve_regions": [
+        "上部时间戳",
+        "底部机位标识",
+        "料斗边框"
+      ],
+      "lighting_policy": "按本张原图推断；不预设所有图共用固定主光方向"
+    },
+    {
+      "filename": "2026_08_06_36_6_jianliao1_50_houjian_18#33_zhongfei3_15_zhongfei2_8#33_jianliao2_8#33_16.jpg",
+      "sha256": "d8d5d3e180b73bb6a940c3138acf2e1d28b770c6d7a5f8dc43e5ff82d9ce2591",
+      "width": 3840,
+      "height": 2160,
+      "filename_group": "2026_08_06_36_6_jianliao1_50_houjian_18#33_zhongfei3_15_zhongfei2_8#33_jianliao2_8#33",
+      "luma_mean_downsampled": 123.82,
+      "luma_std_downsampled": 51.69,
+      "assumed_scene_width_mm": 2400,
+      "calibration_status": "unmeasured_assumption",
+      "suggested_pile_roi_xywh": [
+        0.16,
+        0.22,
+        0.68,
+        0.56
+      ],
+      "roi_status": "generic_hint_requires_per_image_confirmation_not_mask",
+      "preserve_regions": [
+        "上部时间戳",
+        "底部机位标识",
+        "料斗边框"
+      ],
+      "lighting_policy": "按本张原图推断；不预设所有图共用固定主光方向"
+    },
+    {
+      "filename": "2026_08_06_36_6_jianliao1_50_houjian_18#33_zhongfei3_15_zhongfei2_8#33_jianliao2_8#33_17.jpg",
+      "sha256": "98466373734be595117a2f5316d66d81ea93fe7d1a1721bb6202bbe8e70bb659",
+      "width": 3840,
+      "height": 2160,
+      "filename_group": "2026_08_06_36_6_jianliao1_50_houjian_18#33_zhongfei3_15_zhongfei2_8#33_jianliao2_8#33",
+      "luma_mean_downsampled": 124.61,
+      "luma_std_downsampled": 54.41,
+      "assumed_scene_width_mm": 2400,
+      "calibration_status": "unmeasured_assumption",
+      "suggested_pile_roi_xywh": [
+        0.16,
+        0.22,
+        0.68,
+        0.56
+      ],
+      "roi_status": "generic_hint_requires_per_image_confirmation_not_mask",
+      "preserve_regions": [
+        "上部时间戳",
+        "底部机位标识",
+        "料斗边框"
+      ],
+      "lighting_policy": "按本张原图推断；不预设所有图共用固定主光方向"
+    },
+    {
+      "filename": "2026_08_06_36_6_jianliao1_50_houjian_18#33_zhongfei3_15_zhongfei2_8#33_jianliao2_8#33_18.jpg",
+      "sha256": "b1c735984de09ea73dd01f7c713b4a1f4b1034e46e03dae873ee6b17d54bca9a",
+      "width": 3840,
+      "height": 2160,
+      "filename_group": "2026_08_06_36_6_jianliao1_50_houjian_18#33_zhongfei3_15_zhongfei2_8#33_jianliao2_8#33",
+      "luma_mean_downsampled": 108.33,
+      "luma_std_downsampled": 58.72,
+      "assumed_scene_width_mm": 2400,
+      "calibration_status": "unmeasured_assumption",
+      "suggested_pile_roi_xywh": [
+        0.16,
+        0.22,
+        0.68,
+        0.56
+      ],
+      "roi_status": "generic_hint_requires_per_image_confirmation_not_mask",
+      "preserve_regions": [
+        "上部时间戳",
+        "底部机位标识",
+        "料斗边框"
+      ],
+      "lighting_policy": "按本张原图推断；不预设所有图共用固定主光方向"
+    },
+    {
+      "filename": "2026_08_06_36_6_jianliao1_50_houjian_18#33_zhongfei3_15_zhongfei2_8#33_jianliao2_8#33_19.jpg",
+      "sha256": "fbaea8f338d541ba6088ae7bd2cf7fa6383554b01d1ac1da680f5e03cdd1d0e3",
+      "width": 3840,
+      "height": 2160,
+      "filename_group": "2026_08_06_36_6_jianliao1_50_houjian_18#33_zhongfei3_15_zhongfei2_8#33_jianliao2_8#33",
+      "luma_mean_downsampled": 113.21,
+      "luma_std_downsampled": 60.24,
+      "assumed_scene_width_mm": 2400,
+      "calibration_status": "unmeasured_assumption",
+      "suggested_pile_roi_xywh": [
+        0.16,
+        0.22,
+        0.68,
+        0.56
+      ],
+      "roi_status": "generic_hint_requires_per_image_confirmation_not_mask",
+      "preserve_regions": [
+        "上部时间戳",
+        "底部机位标识",
+        "料斗边框"
+      ],
+      "lighting_policy": "按本张原图推断；不预设所有图共用固定主光方向"
+    },
+    {
+      "filename": "2026_08_06_36_6_jianliao1_50_houjian_18#33_zhongfei3_15_zhongfei2_8#33_jianliao2_8#33_20.jpg",
+      "sha256": "bcb3542206ee04d3e3e2aa13836e7a79d2c04e76fb43fac3fcf38eaee213e979",
+      "width": 3840,
+      "height": 2160,
+      "filename_group": "2026_08_06_36_6_jianliao1_50_houjian_18#33_zhongfei3_15_zhongfei2_8#33_jianliao2_8#33",
+      "luma_mean_downsampled": 120.72,
+      "luma_std_downsampled": 58.4,
+      "assumed_scene_width_mm": 2400,
+      "calibration_status": "unmeasured_assumption",
+      "suggested_pile_roi_xywh": [
+        0.16,
+        0.22,
+        0.68,
+        0.56
+      ],
+      "roi_status": "generic_hint_requires_per_image_confirmation_not_mask",
+      "preserve_regions": [
+        "上部时间戳",
+        "底部机位标识",
+        "料斗边框"
+      ],
+      "lighting_policy": "按本张原图推断；不预设所有图共用固定主光方向"
+    },
+    {
+      "filename": "2026_08_06_36_6_jianliao1_50_houjian_18#33_zhongfei3_15_zhongfei2_8#33_jianliao2_8#33_21.jpg",
+      "sha256": "e3228c9403575dcc21fb0f1f29780275d106327d80a5a4a0fb8e4d97649dd361",
+      "width": 3840,
+      "height": 2160,
+      "filename_group": "2026_08_06_36_6_jianliao1_50_houjian_18#33_zhongfei3_15_zhongfei2_8#33_jianliao2_8#33",
+      "luma_mean_downsampled": 120.57,
+      "luma_std_downsampled": 54.0,
+      "assumed_scene_width_mm": 2400,
+      "calibration_status": "unmeasured_assumption",
+      "suggested_pile_roi_xywh": [
+        0.16,
+        0.22,
+        0.68,
+        0.56
+      ],
+      "roi_status": "generic_hint_requires_per_image_confirmation_not_mask",
+      "preserve_regions": [
+        "上部时间戳",
+        "底部机位标识",
+        "料斗边框"
+      ],
+      "lighting_policy": "按本张原图推断；不预设所有图共用固定主光方向"
+    },
+    {
+      "filename": "2026_08_06_36_6_jianliao1_50_houjian_18#33_zhongfei3_15_zhongfei2_8#33_jianliao2_8#33_22.jpg",
+      "sha256": "fc9aa63551ed32f0cbc9dc755eac02c656d0e63f1685fc337f7e2c6f5d690a13",
+      "width": 3840,
+      "height": 2160,
+      "filename_group": "2026_08_06_36_6_jianliao1_50_houjian_18#33_zhongfei3_15_zhongfei2_8#33_jianliao2_8#33",
+      "luma_mean_downsampled": 114.65,
+      "luma_std_downsampled": 54.16,
+      "assumed_scene_width_mm": 2400,
+      "calibration_status": "unmeasured_assumption",
+      "suggested_pile_roi_xywh": [
+        0.16,
+        0.22,
+        0.68,
+        0.56
+      ],
+      "roi_status": "generic_hint_requires_per_image_confirmation_not_mask",
+      "preserve_regions": [
+        "上部时间戳",
+        "底部机位标识",
+        "料斗边框"
+      ],
+      "lighting_policy": "按本张原图推断；不预设所有图共用固定主光方向"
+    },
+    {
+      "filename": "2026_08_06_36_6_jianliao1_50_houjian_18#33_zhongfei3_15_zhongfei2_8#33_jianliao2_8#33_23.jpg",
+      "sha256": "ad242e223911db869dde0aeddfea9388c9cebb7494a3971f9b29887349347f3d",
+      "width": 3840,
+      "height": 2160,
+      "filename_group": "2026_08_06_36_6_jianliao1_50_houjian_18#33_zhongfei3_15_zhongfei2_8#33_jianliao2_8#33",
+      "luma_mean_downsampled": 119.5,
+      "luma_std_downsampled": 52.72,
+      "assumed_scene_width_mm": 2400,
+      "calibration_status": "unmeasured_assumption",
+      "suggested_pile_roi_xywh": [
+        0.16,
+        0.22,
+        0.68,
+        0.56
+      ],
+      "roi_status": "generic_hint_requires_per_image_confirmation_not_mask",
+      "preserve_regions": [
+        "上部时间戳",
+        "底部机位标识",
+        "料斗边框"
+      ],
+      "lighting_policy": "按本张原图推断；不预设所有图共用固定主光方向"
+    },
+    {
+      "filename": "2026_08_06_36_6_jianliao1_50_houjian_18#33_zhongfei3_15_zhongfei2_8#33_jianliao2_8#33_24.jpg",
+      "sha256": "d5b25724f2ad97448e77efafd275d484f747661c0ebc1a246f16196e1ae50740",
+      "width": 3840,
+      "height": 2160,
+      "filename_group": "2026_08_06_36_6_jianliao1_50_houjian_18#33_zhongfei3_15_zhongfei2_8#33_jianliao2_8#33",
+      "luma_mean_downsampled": 120.22,
+      "luma_std_downsampled": 52.56,
+      "assumed_scene_width_mm": 2400,
+      "calibration_status": "unmeasured_assumption",
+      "suggested_pile_roi_xywh": [
+        0.16,
+        0.22,
+        0.68,
+        0.56
+      ],
+      "roi_status": "generic_hint_requires_per_image_confirmation_not_mask",
+      "preserve_regions": [
+        "上部时间戳",
+        "底部机位标识",
+        "料斗边框"
+      ],
+      "lighting_policy": "按本张原图推断；不预设所有图共用固定主光方向"
+    },
+    {
+      "filename": "2026_08_06_36_6_jianliao1_50_houjian_18#33_zhongfei3_15_zhongfei2_8#33_jianliao2_8#33_25.jpg",
+      "sha256": "283f911da2792c6aa00b305160d3562adedf15008259b067518579361b08ffe4",
+      "width": 3840,
+      "height": 2160,
+      "filename_group": "2026_08_06_36_6_jianliao1_50_houjian_18#33_zhongfei3_15_zhongfei2_8#33_jianliao2_8#33",
+      "luma_mean_downsampled": 118.04,
+      "luma_std_downsampled": 55.69,
+      "assumed_scene_width_mm": 2400,
+      "calibration_status": "unmeasured_assumption",
+      "suggested_pile_roi_xywh": [
+        0.16,
+        0.22,
+        0.68,
+        0.56
+      ],
+      "roi_status": "generic_hint_requires_per_image_confirmation_not_mask",
+      "preserve_regions": [
+        "上部时间戳",
+        "底部机位标识",
+        "料斗边框"
+      ],
+      "lighting_policy": "按本张原图推断；不预设所有图共用固定主光方向"
+    },
+    {
+      "filename": "2026_08_06_36_6_jianliao1_50_houjian_18#33_zhongfei3_15_zhongfei2_8#33_jianliao2_8#33_27.jpg",
+      "sha256": "da07c257f88d863c309c208270003add1b40e10005ad9a037238511a3270e92b",
+      "width": 3840,
+      "height": 2160,
+      "filename_group": "2026_08_06_36_6_jianliao1_50_houjian_18#33_zhongfei3_15_zhongfei2_8#33_jianliao2_8#33",
+      "luma_mean_downsampled": 120.52,
+      "luma_std_downsampled": 59.13,
+      "assumed_scene_width_mm": 2400,
+      "calibration_status": "unmeasured_assumption",
+      "suggested_pile_roi_xywh": [
+        0.16,
+        0.22,
+        0.68,
+        0.56
+      ],
+      "roi_status": "generic_hint_requires_per_image_confirmation_not_mask",
+      "preserve_regions": [
+        "上部时间戳",
+        "底部机位标识",
+        "料斗边框"
+      ],
+      "lighting_policy": "按本张原图推断；不预设所有图共用固定主光方向"
+    },
+    {
+      "filename": "2026_08_06_36_6_jianliao1_50_houjian_18#33_zhongfei3_15_zhongfei2_8#33_jianliao2_8#33_29.jpg",
+      "sha256": "2e3983bb7df91eb6fe0f5a01dbbe9fa922d788494378042786849cbfcbeb9e42",
+      "width": 3840,
+      "height": 2160,
+      "filename_group": "2026_08_06_36_6_jianliao1_50_houjian_18#33_zhongfei3_15_zhongfei2_8#33_jianliao2_8#33",
+      "luma_mean_downsampled": 118.62,
+      "luma_std_downsampled": 56.38,
+      "assumed_scene_width_mm": 2400,
+      "calibration_status": "unmeasured_assumption",
+      "suggested_pile_roi_xywh": [
+        0.16,
+        0.22,
+        0.68,
+        0.56
+      ],
+      "roi_status": "generic_hint_requires_per_image_confirmation_not_mask",
+      "preserve_regions": [
+        "上部时间戳",
+        "底部机位标识",
+        "料斗边框"
+      ],
+      "lighting_policy": "按本张原图推断；不预设所有图共用固定主光方向"
+    },
+    {
+      "filename": "2026_08_06_36_6_jianliao1_50_houjian_18#33_zhongfei3_15_zhongfei2_8#33_jianliao2_8#33_3.jpg",
+      "sha256": "de3492c4fd071d59ae24ea223f38058253dd422edc068034352bab7e559b31ad",
+      "width": 3840,
+      "height": 2160,
+      "filename_group": "2026_08_06_36_6_jianliao1_50_houjian_18#33_zhongfei3_15_zhongfei2_8#33_jianliao2_8#33",
+      "luma_mean_downsampled": 120.4,
+      "luma_std_downsampled": 57.14,
+      "assumed_scene_width_mm": 2400,
+      "calibration_status": "unmeasured_assumption",
+      "suggested_pile_roi_xywh": [
+        0.16,
+        0.22,
+        0.68,
+        0.56
+      ],
+      "roi_status": "generic_hint_requires_per_image_confirmation_not_mask",
+      "preserve_regions": [
+        "上部时间戳",
+        "底部机位标识",
+        "料斗边框"
+      ],
+      "lighting_policy": "按本张原图推断；不预设所有图共用固定主光方向"
+    },
+    {
+      "filename": "2026_08_06_36_6_jianliao1_50_houjian_18#33_zhongfei3_15_zhongfei2_8#33_jianliao2_8#33_32.jpg",
+      "sha256": "86bee1c808f6859698f1fef92890c8e4a2aaacd9f5c25eec8767def35664b247",
+      "width": 3840,
+      "height": 2160,
+      "filename_group": "2026_08_06_36_6_jianliao1_50_houjian_18#33_zhongfei3_15_zhongfei2_8#33_jianliao2_8#33",
+      "luma_mean_downsampled": 112.49,
+      "luma_std_downsampled": 58.0,
+      "assumed_scene_width_mm": 2400,
+      "calibration_status": "unmeasured_assumption",
+      "suggested_pile_roi_xywh": [
+        0.16,
+        0.22,
+        0.68,
+        0.56
+      ],
+      "roi_status": "generic_hint_requires_per_image_confirmation_not_mask",
+      "preserve_regions": [
+        "上部时间戳",
+        "底部机位标识",
+        "料斗边框"
+      ],
+      "lighting_policy": "按本张原图推断；不预设所有图共用固定主光方向"
+    },
+    {
+      "filename": "2026_08_06_36_6_jianliao1_50_houjian_18#33_zhongfei3_15_zhongfei2_8#33_jianliao2_8#33_33.jpg",
+      "sha256": "0ae4303f580c85e367b87fab8fedbafc3de44acd6c1d94852f4ba2740417a443",
+      "width": 3840,
+      "height": 2160,
+      "filename_group": "2026_08_06_36_6_jianliao1_50_houjian_18#33_zhongfei3_15_zhongfei2_8#33_jianliao2_8#33",
+      "luma_mean_downsampled": 115.97,
+      "luma_std_downsampled": 54.6,
+      "assumed_scene_width_mm": 2400,
+      "calibration_status": "unmeasured_assumption",
+      "suggested_pile_roi_xywh": [
+        0.16,
+        0.22,
+        0.68,
+        0.56
+      ],
+      "roi_status": "generic_hint_requires_per_image_confirmation_not_mask",
+      "preserve_regions": [
+        "上部时间戳",
+        "底部机位标识",
+        "料斗边框"
+      ],
+      "lighting_policy": "按本张原图推断；不预设所有图共用固定主光方向"
+    },
+    {
+      "filename": "2026_08_06_36_6_jianliao1_50_houjian_18#33_zhongfei3_15_zhongfei2_8#33_jianliao2_8#33_34.jpg",
+      "sha256": "860abe38eab435cbaee10dd7f4831cd647a53de3df6c3063393298b7bfabd4af",
+      "width": 3840,
+      "height": 2160,
+      "filename_group": "2026_08_06_36_6_jianliao1_50_houjian_18#33_zhongfei3_15_zhongfei2_8#33_jianliao2_8#33",
+      "luma_mean_downsampled": 116.28,
+      "luma_std_downsampled": 54.01,
+      "assumed_scene_width_mm": 2400,
+      "calibration_status": "unmeasured_assumption",
+      "suggested_pile_roi_xywh": [
+        0.16,
+        0.22,
+        0.68,
+        0.56
+      ],
+      "roi_status": "generic_hint_requires_per_image_confirmation_not_mask",
+      "preserve_regions": [
+        "上部时间戳",
+        "底部机位标识",
+        "料斗边框"
+      ],
+      "lighting_policy": "按本张原图推断；不预设所有图共用固定主光方向"
+    },
+    {
+      "filename": "2026_08_06_36_6_jianliao1_50_houjian_18#33_zhongfei3_15_zhongfei2_8#33_jianliao2_8#33_35.jpg",
+      "sha256": "001498105ff84b1db951d17f7db37edc24980cf4306e9977311613144877b814",
+      "width": 3840,
+      "height": 2160,
+      "filename_group": "2026_08_06_36_6_jianliao1_50_houjian_18#33_zhongfei3_15_zhongfei2_8#33_jianliao2_8#33",
+      "luma_mean_downsampled": 114.4,
+      "luma_std_downsampled": 57.29,
+      "assumed_scene_width_mm": 2400,
+      "calibration_status": "unmeasured_assumption",
+      "suggested_pile_roi_xywh": [
+        0.16,
+        0.22,
+        0.68,
+        0.56
+      ],
+      "roi_status": "generic_hint_requires_per_image_confirmation_not_mask",
+      "preserve_regions": [
+        "上部时间戳",
+        "底部机位标识",
+        "料斗边框"
+      ],
+      "lighting_policy": "按本张原图推断；不预设所有图共用固定主光方向"
+    },
+    {
+      "filename": "2026_08_06_36_6_jianliao1_50_houjian_18#33_zhongfei3_15_zhongfei2_8#33_jianliao2_8#33_36.jpg",
+      "sha256": "be665722ffbd416cb8457e9b8ea01da6b8e1aa64adb24d80a3205755c3dc1290",
+      "width": 3840,
+      "height": 2160,
+      "filename_group": "2026_08_06_36_6_jianliao1_50_houjian_18#33_zhongfei3_15_zhongfei2_8#33_jianliao2_8#33",
+      "luma_mean_downsampled": 117.99,
+      "luma_std_downsampled": 55.03,
+      "assumed_scene_width_mm": 2400,
+      "calibration_status": "unmeasured_assumption",
+      "suggested_pile_roi_xywh": [
+        0.16,
+        0.22,
+        0.68,
+        0.56
+      ],
+      "roi_status": "generic_hint_requires_per_image_confirmation_not_mask",
+      "preserve_regions": [
+        "上部时间戳",
+        "底部机位标识",
+        "料斗边框"
+      ],
+      "lighting_policy": "按本张原图推断；不预设所有图共用固定主光方向"
+    },
+    {
+      "filename": "2026_08_06_36_6_jianliao1_50_houjian_18#33_zhongfei3_15_zhongfei2_8#33_jianliao2_8#33_37.jpg",
+      "sha256": "6b50acfe5b310247a0ce24f74998f2f9eb3dc1624412dbf1fa9eed35a4e67e5f",
+      "width": 3840,
+      "height": 2160,
+      "filename_group": "2026_08_06_36_6_jianliao1_50_houjian_18#33_zhongfei3_15_zhongfei2_8#33_jianliao2_8#33",
+      "luma_mean_downsampled": 117.15,
+      "luma_std_downsampled": 59.02,
+      "assumed_scene_width_mm": 2400,
+      "calibration_status": "unmeasured_assumption",
+      "suggested_pile_roi_xywh": [
+        0.16,
+        0.22,
+        0.68,
+        0.56
+      ],
+      "roi_status": "generic_hint_requires_per_image_confirmation_not_mask",
+      "preserve_regions": [
+        "上部时间戳",
+        "底部机位标识",
+        "料斗边框"
+      ],
+      "lighting_policy": "按本张原图推断；不预设所有图共用固定主光方向"
+    },
+    {
+      "filename": "2026_08_06_36_6_jianliao1_50_houjian_18#33_zhongfei3_15_zhongfei2_8#33_jianliao2_8#33_38.jpg",
+      "sha256": "6beadb77ba1ac5206f973a2e31462580741d34a84da5242929a0966d8c1175b7",
+      "width": 3840,
+      "height": 2160,
+      "filename_group": "2026_08_06_36_6_jianliao1_50_houjian_18#33_zhongfei3_15_zhongfei2_8#33_jianliao2_8#33",
+      "luma_mean_downsampled": 120.49,
+      "luma_std_downsampled": 56.99,
+      "assumed_scene_width_mm": 2400,
+      "calibration_status": "unmeasured_assumption",
+      "suggested_pile_roi_xywh": [
+        0.16,
+        0.22,
+        0.68,
+        0.56
+      ],
+      "roi_status": "generic_hint_requires_per_image_confirmation_not_mask",
+      "preserve_regions": [
+        "上部时间戳",
+        "底部机位标识",
+        "料斗边框"
+      ],
+      "lighting_policy": "按本张原图推断；不预设所有图共用固定主光方向"
+    },
+    {
+      "filename": "2026_08_06_36_6_jianliao1_50_houjian_18#33_zhongfei3_15_zhongfei2_8#33_jianliao2_8#33_39.jpg",
+      "sha256": "d45e1a7c8647c33ba85aed84b7ebeecee0d3a872f16faad1fb5bd11fdc21bf6b",
+      "width": 3840,
+      "height": 2160,
+      "filename_group": "2026_08_06_36_6_jianliao1_50_houjian_18#33_zhongfei3_15_zhongfei2_8#33_jianliao2_8#33",
+      "luma_mean_downsampled": 117.77,
+      "luma_std_downsampled": 56.65,
+      "assumed_scene_width_mm": 2400,
+      "calibration_status": "unmeasured_assumption",
+      "suggested_pile_roi_xywh": [
+        0.16,
+        0.22,
+        0.68,
+        0.56
+      ],
+      "roi_status": "generic_hint_requires_per_image_confirmation_not_mask",
+      "preserve_regions": [
+        "上部时间戳",
+        "底部机位标识",
+        "料斗边框"
+      ],
+      "lighting_policy": "按本张原图推断；不预设所有图共用固定主光方向"
+    },
+    {
+      "filename": "2026_08_06_36_6_jianliao1_50_houjian_18#33_zhongfei3_15_zhongfei2_8#33_jianliao2_8#33_4.jpg",
+      "sha256": "f5b565542ff480ddc6da651d2725cbd30218a8f8ae4b33d23483926acec25b48",
+      "width": 3840,
+      "height": 2160,
+      "filename_group": "2026_08_06_36_6_jianliao1_50_houjian_18#33_zhongfei3_15_zhongfei2_8#33_jianliao2_8#33",
+      "luma_mean_downsampled": 123.0,
+      "luma_std_downsampled": 50.84,
+      "assumed_scene_width_mm": 2400,
+      "calibration_status": "unmeasured_assumption",
+      "suggested_pile_roi_xywh": [
+        0.16,
+        0.22,
+        0.68,
+        0.56
+      ],
+      "roi_status": "generic_hint_requires_per_image_confirmation_not_mask",
+      "preserve_regions": [
+        "上部时间戳",
+        "底部机位标识",
+        "料斗边框"
+      ],
+      "lighting_policy": "按本张原图推断；不预设所有图共用固定主光方向"
+    },
+    {
+      "filename": "2026_08_06_36_6_jianliao1_50_houjian_18#33_zhongfei3_15_zhongfei2_8#33_jianliao2_8#33_40.jpg",
+      "sha256": "fb330d08243cc0c9f363efb8e5c495e0496113eb39846de931e62f164a359f32",
+      "width": 3840,
+      "height": 2160,
+      "filename_group": "2026_08_06_36_6_jianliao1_50_houjian_18#33_zhongfei3_15_zhongfei2_8#33_jianliao2_8#33",
+      "luma_mean_downsampled": 118.5,
+      "luma_std_downsampled": 58.33,
+      "assumed_scene_width_mm": 2400,
+      "calibration_status": "unmeasured_assumption",
+      "suggested_pile_roi_xywh": [
+        0.16,
+        0.22,
+        0.68,
+        0.56
+      ],
+      "roi_status": "generic_hint_requires_per_image_confirmation_not_mask",
+      "preserve_regions": [
+        "上部时间戳",
+        "底部机位标识",
+        "料斗边框"
+      ],
+      "lighting_policy": "按本张原图推断；不预设所有图共用固定主光方向"
+    },
+    {
+      "filename": "2026_08_06_36_6_jianliao1_50_houjian_18#33_zhongfei3_15_zhongfei2_8#33_jianliao2_8#33_43.jpg",
+      "sha256": "dd6232dc10fd91e8616a335b9f7fff93ba83f12fa10b87f7df9a63968dce6ee0",
+      "width": 3840,
+      "height": 2160,
+      "filename_group": "2026_08_06_36_6_jianliao1_50_houjian_18#33_zhongfei3_15_zhongfei2_8#33_jianliao2_8#33",
+      "luma_mean_downsampled": 117.22,
+      "luma_std_downsampled": 56.44,
+      "assumed_scene_width_mm": 2400,
+      "calibration_status": "unmeasured_assumption",
+      "suggested_pile_roi_xywh": [
+        0.16,
+        0.22,
+        0.68,
+        0.56
+      ],
+      "roi_status": "generic_hint_requires_per_image_confirmation_not_mask",
+      "preserve_regions": [
+        "上部时间戳",
+        "底部机位标识",
+        "料斗边框"
+      ],
+      "lighting_policy": "按本张原图推断；不预设所有图共用固定主光方向"
+    },
+    {
+      "filename": "2026_08_06_36_6_jianliao1_50_houjian_18#33_zhongfei3_15_zhongfei2_8#33_jianliao2_8#33_44.jpg",
+      "sha256": "d1ce5956c47ff21c39b7f3c3a97f271d354652253db33e2d45830b7261b92c30",
+      "width": 3840,
+      "height": 2160,
+      "filename_group": "2026_08_06_36_6_jianliao1_50_houjian_18#33_zhongfei3_15_zhongfei2_8#33_jianliao2_8#33",
+      "luma_mean_downsampled": 119.48,
+      "luma_std_downsampled": 55.48,
+      "assumed_scene_width_mm": 2400,
+      "calibration_status": "unmeasured_assumption",
+      "suggested_pile_roi_xywh": [
+        0.16,
+        0.22,
+        0.68,
+        0.56
+      ],
+      "roi_status": "generic_hint_requires_per_image_confirmation_not_mask",
+      "preserve_regions": [
+        "上部时间戳",
+        "底部机位标识",
+        "料斗边框"
+      ],
+      "lighting_policy": "按本张原图推断；不预设所有图共用固定主光方向"
+    },
+    {
+      "filename": "2026_08_06_36_6_jianliao1_50_houjian_18#33_zhongfei3_15_zhongfei2_8#33_jianliao2_8#33_45.jpg",
+      "sha256": "5a8fd3132970a95223a3e55c1e607f77d1187789d0521e18168adb1d9c468d6e",
+      "width": 3840,
+      "height": 2160,
+      "filename_group": "2026_08_06_36_6_jianliao1_50_houjian_18#33_zhongfei3_15_zhongfei2_8#33_jianliao2_8#33",
+      "luma_mean_downsampled": 118.12,
+      "luma_std_downsampled": 56.07,
+      "assumed_scene_width_mm": 2400,
+      "calibration_status": "unmeasured_assumption",
+      "suggested_pile_roi_xywh": [
+        0.16,
+        0.22,
+        0.68,
+        0.56
+      ],
+      "roi_status": "generic_hint_requires_per_image_confirmation_not_mask",
+      "preserve_regions": [
+        "上部时间戳",
+        "底部机位标识",
+        "料斗边框"
+      ],
+      "lighting_policy": "按本张原图推断；不预设所有图共用固定主光方向"
+    },
+    {
+      "filename": "2026_08_06_36_6_jianliao1_50_houjian_18#33_zhongfei3_15_zhongfei2_8#33_jianliao2_8#33_46.jpg",
+      "sha256": "843094bdc7e5ee941019cd6a243efd6360169c171a0db36c826245c64594997d",
+      "width": 3840,
+      "height": 2160,
+      "filename_group": "2026_08_06_36_6_jianliao1_50_houjian_18#33_zhongfei3_15_zhongfei2_8#33_jianliao2_8#33",
+      "luma_mean_downsampled": 115.96,
+      "luma_std_downsampled": 56.14,
+      "assumed_scene_width_mm": 2400,
+      "calibration_status": "unmeasured_assumption",
+      "suggested_pile_roi_xywh": [
+        0.16,
+        0.22,
+        0.68,
+        0.56
+      ],
+      "roi_status": "generic_hint_requires_per_image_confirmation_not_mask",
+      "preserve_regions": [
+        "上部时间戳",
+        "底部机位标识",
+        "料斗边框"
+      ],
+      "lighting_policy": "按本张原图推断；不预设所有图共用固定主光方向"
+    },
+    {
+      "filename": "2026_08_06_36_6_jianliao1_50_houjian_18#33_zhongfei3_15_zhongfei2_8#33_jianliao2_8#33_48.jpg",
+      "sha256": "26a5f9bf990fc649d1a92b6caf5982e5d6c4ca4abc688d127368f0cb6f5a707f",
+      "width": 3840,
+      "height": 2160,
+      "filename_group": "2026_08_06_36_6_jianliao1_50_houjian_18#33_zhongfei3_15_zhongfei2_8#33_jianliao2_8#33",
+      "luma_mean_downsampled": 121.06,
+      "luma_std_downsampled": 56.65,
+      "assumed_scene_width_mm": 2400,
+      "calibration_status": "unmeasured_assumption",
+      "suggested_pile_roi_xywh": [
+        0.16,
+        0.22,
+        0.68,
+        0.56
+      ],
+      "roi_status": "generic_hint_requires_per_image_confirmation_not_mask",
+      "preserve_regions": [
+        "上部时间戳",
+        "底部机位标识",
+        "料斗边框"
+      ],
+      "lighting_policy": "按本张原图推断；不预设所有图共用固定主光方向"
+    },
+    {
+      "filename": "2026_08_06_36_6_jianliao1_50_houjian_18#33_zhongfei3_15_zhongfei2_8#33_jianliao2_8#33_49.jpg",
+      "sha256": "e15d4f63fc24b9f74e4fee923933e5919a3b8822d6a16dadc4619f687fb6c073",
+      "width": 3840,
+      "height": 2160,
+      "filename_group": "2026_08_06_36_6_jianliao1_50_houjian_18#33_zhongfei3_15_zhongfei2_8#33_jianliao2_8#33",
+      "luma_mean_downsampled": 119.43,
+      "luma_std_downsampled": 57.25,
+      "assumed_scene_width_mm": 2400,
+      "calibration_status": "unmeasured_assumption",
+      "suggested_pile_roi_xywh": [
+        0.16,
+        0.22,
+        0.68,
+        0.56
+      ],
+      "roi_status": "generic_hint_requires_per_image_confirmation_not_mask",
+      "preserve_regions": [
+        "上部时间戳",
+        "底部机位标识",
+        "料斗边框"
+      ],
+      "lighting_policy": "按本张原图推断；不预设所有图共用固定主光方向"
+    },
+    {
+      "filename": "2026_08_06_36_6_jianliao1_50_houjian_18#33_zhongfei3_15_zhongfei2_8#33_jianliao2_8#33_50.jpg",
+      "sha256": "83bd1f9a1ee5dba36bca53e45f8d7511f636e88371931986b0c6d5e3349a38ea",
+      "width": 3840,
+      "height": 2160,
+      "filename_group": "2026_08_06_36_6_jianliao1_50_houjian_18#33_zhongfei3_15_zhongfei2_8#33_jianliao2_8#33",
+      "luma_mean_downsampled": 118.34,
+      "luma_std_downsampled": 57.7,
+      "assumed_scene_width_mm": 2400,
+      "calibration_status": "unmeasured_assumption",
+      "suggested_pile_roi_xywh": [
+        0.16,
+        0.22,
+        0.68,
+        0.56
+      ],
+      "roi_status": "generic_hint_requires_per_image_confirmation_not_mask",
+      "preserve_regions": [
+        "上部时间戳",
+        "底部机位标识",
+        "料斗边框"
+      ],
+      "lighting_policy": "按本张原图推断；不预设所有图共用固定主光方向"
+    },
+    {
+      "filename": "2026_08_06_36_6_jianliao1_50_houjian_18#33_zhongfei3_15_zhongfei2_8#33_jianliao2_8#33_51.jpg",
+      "sha256": "c3a598ce6340f086e145c38fc737f8e9eccc5ffd3307e5734cd649034286f341",
+      "width": 3840,
+      "height": 2160,
+      "filename_group": "2026_08_06_36_6_jianliao1_50_houjian_18#33_zhongfei3_15_zhongfei2_8#33_jianliao2_8#33",
+      "luma_mean_downsampled": 116.49,
+      "luma_std_downsampled": 57.66,
+      "assumed_scene_width_mm": 2400,
+      "calibration_status": "unmeasured_assumption",
+      "suggested_pile_roi_xywh": [
+        0.16,
+        0.22,
+        0.68,
+        0.56
+      ],
+      "roi_status": "generic_hint_requires_per_image_confirmation_not_mask",
+      "preserve_regions": [
+        "上部时间戳",
+        "底部机位标识",
+        "料斗边框"
+      ],
+      "lighting_policy": "按本张原图推断；不预设所有图共用固定主光方向"
+    },
+    {
+      "filename": "2026_08_06_36_6_jianliao1_50_houjian_18#33_zhongfei3_15_zhongfei2_8#33_jianliao2_8#33_53.jpg",
+      "sha256": "5ebaea46900c6736326927d0c90a660f14633355a18e85588b34276a7d1ed144",
+      "width": 3840,
+      "height": 2160,
+      "filename_group": "2026_08_06_36_6_jianliao1_50_houjian_18#33_zhongfei3_15_zhongfei2_8#33_jianliao2_8#33",
+      "luma_mean_downsampled": 112.03,
+      "luma_std_downsampled": 53.88,
+      "assumed_scene_width_mm": 2400,
+      "calibration_status": "unmeasured_assumption",
+      "suggested_pile_roi_xywh": [
+        0.16,
+        0.22,
+        0.68,
+        0.56
+      ],
+      "roi_status": "generic_hint_requires_per_image_confirmation_not_mask",
+      "preserve_regions": [
+        "上部时间戳",
+        "底部机位标识",
+        "料斗边框"
+      ],
+      "lighting_policy": "按本张原图推断；不预设所有图共用固定主光方向"
+    },
+    {
+      "filename": "2026_08_06_36_6_jianliao1_50_houjian_18#33_zhongfei3_15_zhongfei2_8#33_jianliao2_8#33_55.jpg",
+      "sha256": "f269d95c95548a1aadb890c15b4db3d9b0bdb22bcf6fc2201fbbddc13e4d083f",
+      "width": 3840,
+      "height": 2160,
+      "filename_group": "2026_08_06_36_6_jianliao1_50_houjian_18#33_zhongfei3_15_zhongfei2_8#33_jianliao2_8#33",
+      "luma_mean_downsampled": 119.76,
+      "luma_std_downsampled": 57.94,
+      "assumed_scene_width_mm": 2400,
+      "calibration_status": "unmeasured_assumption",
+      "suggested_pile_roi_xywh": [
+        0.16,
+        0.22,
+        0.68,
+        0.56
+      ],
+      "roi_status": "generic_hint_requires_per_image_confirmation_not_mask",
+      "preserve_regions": [
+        "上部时间戳",
+        "底部机位标识",
+        "料斗边框"
+      ],
+      "lighting_policy": "按本张原图推断；不预设所有图共用固定主光方向"
+    },
+    {
+      "filename": "2026_08_06_36_6_jianliao1_50_houjian_18#33_zhongfei3_15_zhongfei2_8#33_jianliao2_8#33_56.jpg",
+      "sha256": "541cf159390e69c6d66019d3f5562a2c59e76f42962a883a7b6ea3627c853979",
+      "width": 3840,
+      "height": 2160,
+      "filename_group": "2026_08_06_36_6_jianliao1_50_houjian_18#33_zhongfei3_15_zhongfei2_8#33_jianliao2_8#33",
+      "luma_mean_downsampled": 117.49,
+      "luma_std_downsampled": 58.14,
+      "assumed_scene_width_mm": 2400,
+      "calibration_status": "unmeasured_assumption",
+      "suggested_pile_roi_xywh": [
+        0.16,
+        0.22,
+        0.68,
+        0.56
+      ],
+      "roi_status": "generic_hint_requires_per_image_confirmation_not_mask",
+      "preserve_regions": [
+        "上部时间戳",
+        "底部机位标识",
+        "料斗边框"
+      ],
+      "lighting_policy": "按本张原图推断；不预设所有图共用固定主光方向"
+    },
+    {
+      "filename": "2026_08_06_36_6_jianliao1_50_houjian_18#33_zhongfei3_15_zhongfei2_8#33_jianliao2_8#33_57.jpg",
+      "sha256": "ed3f0e40b9b8c24d186503ee05ddd8588c3842d12b06b06d4728bef0ec0e0633",
+      "width": 3840,
+      "height": 2160,
+      "filename_group": "2026_08_06_36_6_jianliao1_50_houjian_18#33_zhongfei3_15_zhongfei2_8#33_jianliao2_8#33",
+      "luma_mean_downsampled": 117.81,
+      "luma_std_downsampled": 58.82,
+      "assumed_scene_width_mm": 2400,
+      "calibration_status": "unmeasured_assumption",
+      "suggested_pile_roi_xywh": [
+        0.16,
+        0.22,
+        0.68,
+        0.56
+      ],
+      "roi_status": "generic_hint_requires_per_image_confirmation_not_mask",
+      "preserve_regions": [
+        "上部时间戳",
+        "底部机位标识",
+        "料斗边框"
+      ],
+      "lighting_policy": "按本张原图推断；不预设所有图共用固定主光方向"
+    },
+    {
+      "filename": "2026_08_06_36_6_jianliao1_50_houjian_18#33_zhongfei3_15_zhongfei2_8#33_jianliao2_8#33_60.jpg",
+      "sha256": "926807c955b97f6a144bffecdeccb610ac92151d687acbec882c6babf7d40a50",
+      "width": 3840,
+      "height": 2160,
+      "filename_group": "2026_08_06_36_6_jianliao1_50_houjian_18#33_zhongfei3_15_zhongfei2_8#33_jianliao2_8#33",
+      "luma_mean_downsampled": 115.62,
+      "luma_std_downsampled": 59.53,
+      "assumed_scene_width_mm": 2400,
+      "calibration_status": "unmeasured_assumption",
+      "suggested_pile_roi_xywh": [
+        0.16,
+        0.22,
+        0.68,
+        0.56
+      ],
+      "roi_status": "generic_hint_requires_per_image_confirmation_not_mask",
+      "preserve_regions": [
+        "上部时间戳",
+        "底部机位标识",
+        "料斗边框"
+      ],
+      "lighting_policy": "按本张原图推断；不预设所有图共用固定主光方向"
+    },
+    {
+      "filename": "2026_08_06_36_6_jianliao1_50_houjian_18#33_zhongfei3_15_zhongfei2_8#33_jianliao2_8#33_61.jpg",
+      "sha256": "b9a4026089c94b9dda2a0f101133addc5d8b9a129eccc0d0cee21d083c546024",
+      "width": 3840,
+      "height": 2160,
+      "filename_group": "2026_08_06_36_6_jianliao1_50_houjian_18#33_zhongfei3_15_zhongfei2_8#33_jianliao2_8#33",
+      "luma_mean_downsampled": 113.47,
+      "luma_std_downsampled": 60.67,
+      "assumed_scene_width_mm": 2400,
+      "calibration_status": "unmeasured_assumption",
+      "suggested_pile_roi_xywh": [
+        0.16,
+        0.22,
+        0.68,
+        0.56
+      ],
+      "roi_status": "generic_hint_requires_per_image_confirmation_not_mask",
+      "preserve_regions": [
+        "上部时间戳",
+        "底部机位标识",
+        "料斗边框"
+      ],
+      "lighting_policy": "按本张原图推断；不预设所有图共用固定主光方向"
+    },
+    {
+      "filename": "2026_08_06_36_6_jianliao1_50_houjian_18#33_zhongfei3_15_zhongfei2_8#33_jianliao2_8#33_62.jpg",
+      "sha256": "ec568795a999c0b0f1900e18ab7451e18e1b345a75a5f6122748fc624eca8dab",
+      "width": 3840,
+      "height": 2160,
+      "filename_group": "2026_08_06_36_6_jianliao1_50_houjian_18#33_zhongfei3_15_zhongfei2_8#33_jianliao2_8#33",
+      "luma_mean_downsampled": 119.73,
+      "luma_std_downsampled": 59.82,
+      "assumed_scene_width_mm": 2400,
+      "calibration_status": "unmeasured_assumption",
+      "suggested_pile_roi_xywh": [
+        0.16,
+        0.22,
+        0.68,
+        0.56
+      ],
+      "roi_status": "generic_hint_requires_per_image_confirmation_not_mask",
+      "preserve_regions": [
+        "上部时间戳",
+        "底部机位标识",
+        "料斗边框"
+      ],
+      "lighting_policy": "按本张原图推断；不预设所有图共用固定主光方向"
+    },
+    {
+      "filename": "2026_08_06_36_6_jianliao1_50_houjian_18#33_zhongfei3_15_zhongfei2_8#33_jianliao2_8#33_63.jpg",
+      "sha256": "42e9095d7067bd8ce74cb19ea16dbfe11cd97b90cd0406ab14dd8dbaf858cbab",
+      "width": 3840,
+      "height": 2160,
+      "filename_group": "2026_08_06_36_6_jianliao1_50_houjian_18#33_zhongfei3_15_zhongfei2_8#33_jianliao2_8#33",
+      "luma_mean_downsampled": 113.82,
+      "luma_std_downsampled": 59.98,
+      "assumed_scene_width_mm": 2400,
+      "calibration_status": "unmeasured_assumption",
+      "suggested_pile_roi_xywh": [
+        0.16,
+        0.22,
+        0.68,
+        0.56
+      ],
+      "roi_status": "generic_hint_requires_per_image_confirmation_not_mask",
+      "preserve_regions": [
+        "上部时间戳",
+        "底部机位标识",
+        "料斗边框"
+      ],
+      "lighting_policy": "按本张原图推断；不预设所有图共用固定主光方向"
+    },
+    {
+      "filename": "2026_08_06_36_6_jianliao1_50_houjian_18#33_zhongfei3_15_zhongfei2_8#33_jianliao2_8#33_65.jpg",
+      "sha256": "294d5c4880345d37b93ad34a9b47aa3a2ad57afa1507e588440b6c45e36d664c",
+      "width": 3840,
+      "height": 2160,
+      "filename_group": "2026_08_06_36_6_jianliao1_50_houjian_18#33_zhongfei3_15_zhongfei2_8#33_jianliao2_8#33",
+      "luma_mean_downsampled": 113.48,
+      "luma_std_downsampled": 60.27,
+      "assumed_scene_width_mm": 2400,
+      "calibration_status": "unmeasured_assumption",
+      "suggested_pile_roi_xywh": [
+        0.16,
+        0.22,
+        0.68,
+        0.56
+      ],
+      "roi_status": "generic_hint_requires_per_image_confirmation_not_mask",
+      "preserve_regions": [
+        "上部时间戳",
+        "底部机位标识",
+        "料斗边框"
+      ],
+      "lighting_policy": "按本张原图推断；不预设所有图共用固定主光方向"
+    },
+    {
+      "filename": "2026_08_06_36_6_jianliao1_50_houjian_18#33_zhongfei3_15_zhongfei2_8#33_jianliao2_8#33_66.jpg",
+      "sha256": "a56d02edb20b85dcf2d72017c880d0c6087672e65742bc0f41f10a85fc3ff3c6",
+      "width": 3840,
+      "height": 2160,
+      "filename_group": "2026_08_06_36_6_jianliao1_50_houjian_18#33_zhongfei3_15_zhongfei2_8#33_jianliao2_8#33",
+      "luma_mean_downsampled": 114.35,
+      "luma_std_downsampled": 54.46,
+      "assumed_scene_width_mm": 2400,
+      "calibration_status": "unmeasured_assumption",
+      "suggested_pile_roi_xywh": [
+        0.16,
+        0.22,
+        0.68,
+        0.56
+      ],
+      "roi_status": "generic_hint_requires_per_image_confirmation_not_mask",
+      "preserve_regions": [
+        "上部时间戳",
+        "底部机位标识",
+        "料斗边框"
+      ],
+      "lighting_policy": "按本张原图推断；不预设所有图共用固定主光方向"
+    },
+    {
+      "filename": "2026_08_06_36_6_jianliao1_50_houjian_18#33_zhongfei3_15_zhongfei2_8#33_jianliao2_8#33_67.jpg",
+      "sha256": "1524876af5cb1fd78e7314578436b1cd0ac973fd7218afc924ab0e9a22975364",
+      "width": 3840,
+      "height": 2160,
+      "filename_group": "2026_08_06_36_6_jianliao1_50_houjian_18#33_zhongfei3_15_zhongfei2_8#33_jianliao2_8#33",
+      "luma_mean_downsampled": 115.83,
+      "luma_std_downsampled": 58.06,
+      "assumed_scene_width_mm": 2400,
+      "calibration_status": "unmeasured_assumption",
+      "suggested_pile_roi_xywh": [
+        0.16,
+        0.22,
+        0.68,
+        0.56
+      ],
+      "roi_status": "generic_hint_requires_per_image_confirmation_not_mask",
+      "preserve_regions": [
+        "上部时间戳",
+        "底部机位标识",
+        "料斗边框"
+      ],
+      "lighting_policy": "按本张原图推断；不预设所有图共用固定主光方向"
+    },
+    {
+      "filename": "2026_08_06_36_6_jianliao1_50_houjian_18#33_zhongfei3_15_zhongfei2_8#33_jianliao2_8#33_69.jpg",
+      "sha256": "f6d4150f6bf1932f14b4461fb4d4e6dbfd7b6ea7f6150f89d1e6281e07c73fd7",
+      "width": 3840,
+      "height": 2160,
+      "filename_group": "2026_08_06_36_6_jianliao1_50_houjian_18#33_zhongfei3_15_zhongfei2_8#33_jianliao2_8#33",
+      "luma_mean_downsampled": 116.72,
+      "luma_std_downsampled": 59.29,
+      "assumed_scene_width_mm": 2400,
+      "calibration_status": "unmeasured_assumption",
+      "suggested_pile_roi_xywh": [
+        0.16,
+        0.22,
+        0.68,
+        0.56
+      ],
+      "roi_status": "generic_hint_requires_per_image_confirmation_not_mask",
+      "preserve_regions": [
+        "上部时间戳",
+        "底部机位标识",
+        "料斗边框"
+      ],
+      "lighting_policy": "按本张原图推断；不预设所有图共用固定主光方向"
+    },
+    {
+      "filename": "2026_08_06_36_6_jianliao1_50_houjian_18#33_zhongfei3_15_zhongfei2_8#33_jianliao2_8#33_7.jpg",
+      "sha256": "e9aabf5ec72e6b581948ce55cff623efb0c91776d257645cbebffeb601430523",
+      "width": 3840,
+      "height": 2160,
+      "filename_group": "2026_08_06_36_6_jianliao1_50_houjian_18#33_zhongfei3_15_zhongfei2_8#33_jianliao2_8#33",
+      "luma_mean_downsampled": 120.24,
+      "luma_std_downsampled": 55.08,
+      "assumed_scene_width_mm": 2400,
+      "calibration_status": "unmeasured_assumption",
+      "suggested_pile_roi_xywh": [
+        0.16,
+        0.22,
+        0.68,
+        0.56
+      ],
+      "roi_status": "generic_hint_requires_per_image_confirmation_not_mask",
+      "preserve_regions": [
+        "上部时间戳",
+        "底部机位标识",
+        "料斗边框"
+      ],
+      "lighting_policy": "按本张原图推断；不预设所有图共用固定主光方向"
+    },
+    {
+      "filename": "2026_08_06_36_6_jianliao1_50_houjian_18#33_zhongfei3_15_zhongfei2_8#33_jianliao2_8#33_72.jpg",
+      "sha256": "7e711f126ea840e6a45942ee787187166b55f39d628bfad8f6d3015cdafc1ead",
+      "width": 3840,
+      "height": 2160,
+      "filename_group": "2026_08_06_36_6_jianliao1_50_houjian_18#33_zhongfei3_15_zhongfei2_8#33_jianliao2_8#33",
+      "luma_mean_downsampled": 116.84,
+      "luma_std_downsampled": 55.87,
+      "assumed_scene_width_mm": 2400,
+      "calibration_status": "unmeasured_assumption",
+      "suggested_pile_roi_xywh": [
+        0.16,
+        0.22,
+        0.68,
+        0.56
+      ],
+      "roi_status": "generic_hint_requires_per_image_confirmation_not_mask",
+      "preserve_regions": [
+        "上部时间戳",
+        "底部机位标识",
+        "料斗边框"
+      ],
+      "lighting_policy": "按本张原图推断；不预设所有图共用固定主光方向"
+    },
+    {
+      "filename": "2026_08_06_36_6_jianliao1_50_houjian_18#33_zhongfei3_15_zhongfei2_8#33_jianliao2_8#33_77.jpg",
+      "sha256": "299b1cb51eb375cec2238428cf1aa53c863519775002dff83810f50a6c6a7cc2",
+      "width": 3840,
+      "height": 2160,
+      "filename_group": "2026_08_06_36_6_jianliao1_50_houjian_18#33_zhongfei3_15_zhongfei2_8#33_jianliao2_8#33",
+      "luma_mean_downsampled": 116.94,
+      "luma_std_downsampled": 50.75,
+      "assumed_scene_width_mm": 2400,
+      "calibration_status": "unmeasured_assumption",
+      "suggested_pile_roi_xywh": [
+        0.16,
+        0.22,
+        0.68,
+        0.56
+      ],
+      "roi_status": "generic_hint_requires_per_image_confirmation_not_mask",
+      "preserve_regions": [
+        "上部时间戳",
+        "底部机位标识",
+        "料斗边框"
+      ],
+      "lighting_policy": "按本张原图推断；不预设所有图共用固定主光方向"
+    },
+    {
+      "filename": "2026_08_06_36_6_jianliao1_50_houjian_18#33_zhongfei3_15_zhongfei2_8#33_jianliao2_8#33_78.jpg",
+      "sha256": "30a70279891eda825afd973c9ef7375fb791b0c03fa85544b095f7c476f3bc21",
+      "width": 3840,
+      "height": 2160,
+      "filename_group": "2026_08_06_36_6_jianliao1_50_houjian_18#33_zhongfei3_15_zhongfei2_8#33_jianliao2_8#33",
+      "luma_mean_downsampled": 121.16,
+      "luma_std_downsampled": 48.66,
+      "assumed_scene_width_mm": 2400,
+      "calibration_status": "unmeasured_assumption",
+      "suggested_pile_roi_xywh": [
+        0.16,
+        0.22,
+        0.68,
+        0.56
+      ],
+      "roi_status": "generic_hint_requires_per_image_confirmation_not_mask",
+      "preserve_regions": [
+        "上部时间戳",
+        "底部机位标识",
+        "料斗边框"
+      ],
+      "lighting_policy": "按本张原图推断；不预设所有图共用固定主光方向"
+    },
+    {
+      "filename": "2026_08_06_36_6_jianliao1_50_houjian_18#33_zhongfei3_15_zhongfei2_8#33_jianliao2_8#33_79.jpg",
+      "sha256": "e72c55a2d01523d7ded780c271efee724a0cc3ff1d18afd550a1bb0fb2cc2c85",
+      "width": 3840,
+      "height": 2160,
+      "filename_group": "2026_08_06_36_6_jianliao1_50_houjian_18#33_zhongfei3_15_zhongfei2_8#33_jianliao2_8#33",
+      "luma_mean_downsampled": 119.09,
+      "luma_std_downsampled": 51.11,
+      "assumed_scene_width_mm": 2400,
+      "calibration_status": "unmeasured_assumption",
+      "suggested_pile_roi_xywh": [
+        0.16,
+        0.22,
+        0.68,
+        0.56
+      ],
+      "roi_status": "generic_hint_requires_per_image_confirmation_not_mask",
+      "preserve_regions": [
+        "上部时间戳",
+        "底部机位标识",
+        "料斗边框"
+      ],
+      "lighting_policy": "按本张原图推断；不预设所有图共用固定主光方向"
+    },
+    {
+      "filename": "2026_08_06_36_6_jianliao1_50_houjian_18#33_zhongfei3_15_zhongfei2_8#33_jianliao2_8#33_80.jpg",
+      "sha256": "7f8086feca664775e9667339824672eeb107454429ede9def371a71b75441440",
+      "width": 3840,
+      "height": 2160,
+      "filename_group": "2026_08_06_36_6_jianliao1_50_houjian_18#33_zhongfei3_15_zhongfei2_8#33_jianliao2_8#33",
+      "luma_mean_downsampled": 116.43,
+      "luma_std_downsampled": 51.69,
+      "assumed_scene_width_mm": 2400,
+      "calibration_status": "unmeasured_assumption",
+      "suggested_pile_roi_xywh": [
+        0.16,
+        0.22,
+        0.68,
+        0.56
+      ],
+      "roi_status": "generic_hint_requires_per_image_confirmation_not_mask",
+      "preserve_regions": [
+        "上部时间戳",
+        "底部机位标识",
+        "料斗边框"
+      ],
+      "lighting_policy": "按本张原图推断；不预设所有图共用固定主光方向"
+    },
+    {
+      "filename": "2026_08_06_36_6_jianliao1_50_houjian_18#33_zhongfei3_15_zhongfei2_8#33_jianliao2_8#33_9.jpg",
+      "sha256": "547d75300c63301156d10d9265235b1fb2255cd652fbb8183f82f231f7e09eb4",
+      "width": 3840,
+      "height": 2160,
+      "filename_group": "2026_08_06_36_6_jianliao1_50_houjian_18#33_zhongfei3_15_zhongfei2_8#33_jianliao2_8#33",
+      "luma_mean_downsampled": 128.62,
+      "luma_std_downsampled": 51.71,
+      "assumed_scene_width_mm": 2400,
+      "calibration_status": "unmeasured_assumption",
+      "suggested_pile_roi_xywh": [
+        0.16,
+        0.22,
+        0.68,
+        0.56
+      ],
+      "roi_status": "generic_hint_requires_per_image_confirmation_not_mask",
+      "preserve_regions": [
+        "上部时间戳",
+        "底部机位标识",
+        "料斗边框"
+      ],
+      "lighting_policy": "按本张原图推断；不预设所有图共用固定主光方向"
+    },
+    {
+      "filename": "2026_08_06_53_4_zhongfei1_70_zhongfei2_20_medium_10_10.jpg",
+      "sha256": "96d066edbc5130563919cd31887076734266e886baa5f51ebe5a225ad66601a5",
+      "width": 3840,
+      "height": 2160,
+      "filename_group": "2026_08_06_53_4_zhongfei1_70_zhongfei2_20_medium_10",
+      "luma_mean_downsampled": 118.61,
+      "luma_std_downsampled": 44.74,
+      "assumed_scene_width_mm": 2400,
+      "calibration_status": "unmeasured_assumption",
+      "suggested_pile_roi_xywh": [
+        0.16,
+        0.22,
+        0.68,
+        0.56
+      ],
+      "roi_status": "generic_hint_requires_per_image_confirmation_not_mask",
+      "preserve_regions": [
+        "上部时间戳",
+        "底部机位标识",
+        "料斗边框"
+      ],
+      "lighting_policy": "按本张原图推断；不预设所有图共用固定主光方向"
+    },
+    {
+      "filename": "2026_08_06_53_4_zhongfei1_70_zhongfei2_20_medium_10_11.jpg",
+      "sha256": "0f56a68d6190482fc6a0c2af65a6432759045bb19285cec223a70e326801d00a",
+      "width": 3840,
+      "height": 2160,
+      "filename_group": "2026_08_06_53_4_zhongfei1_70_zhongfei2_20_medium_10",
+      "luma_mean_downsampled": 118.56,
+      "luma_std_downsampled": 45.51,
+      "assumed_scene_width_mm": 2400,
+      "calibration_status": "unmeasured_assumption",
+      "suggested_pile_roi_xywh": [
+        0.16,
+        0.22,
+        0.68,
+        0.56
+      ],
+      "roi_status": "generic_hint_requires_per_image_confirmation_not_mask",
+      "preserve_regions": [
+        "上部时间戳",
+        "底部机位标识",
+        "料斗边框"
+      ],
+      "lighting_policy": "按本张原图推断；不预设所有图共用固定主光方向"
+    },
+    {
+      "filename": "2026_08_06_53_4_zhongfei1_70_zhongfei2_20_medium_10_24.jpg",
+      "sha256": "fa144b870d51bd761673b3ec6f3399ac8ca9e4951f1d7f1a27830c6df150c68a",
+      "width": 3840,
+      "height": 2160,
+      "filename_group": "2026_08_06_53_4_zhongfei1_70_zhongfei2_20_medium_10",
+      "luma_mean_downsampled": 115.99,
+      "luma_std_downsampled": 56.03,
+      "assumed_scene_width_mm": 2400,
+      "calibration_status": "unmeasured_assumption",
+      "suggested_pile_roi_xywh": [
+        0.16,
+        0.22,
+        0.68,
+        0.56
+      ],
+      "roi_status": "generic_hint_requires_per_image_confirmation_not_mask",
+      "preserve_regions": [
+        "上部时间戳",
+        "底部机位标识",
+        "料斗边框"
+      ],
+      "lighting_policy": "按本张原图推断；不预设所有图共用固定主光方向"
+    },
+    {
+      "filename": "2026_08_06_53_4_zhongfei1_70_zhongfei2_20_medium_10_25.jpg",
+      "sha256": "2b1c3693c3f176a480a981e271c97ba0b36615f931a343f67546d77f65666c2b",
+      "width": 3840,
+      "height": 2160,
+      "filename_group": "2026_08_06_53_4_zhongfei1_70_zhongfei2_20_medium_10",
+      "luma_mean_downsampled": 115.85,
+      "luma_std_downsampled": 54.34,
+      "assumed_scene_width_mm": 2400,
+      "calibration_status": "unmeasured_assumption",
+      "suggested_pile_roi_xywh": [
+        0.16,
+        0.22,
+        0.68,
+        0.56
+      ],
+      "roi_status": "generic_hint_requires_per_image_confirmation_not_mask",
+      "preserve_regions": [
+        "上部时间戳",
+        "底部机位标识",
+        "料斗边框"
+      ],
+      "lighting_policy": "按本张原图推断；不预设所有图共用固定主光方向"
+    },
+    {
+      "filename": "2026_08_06_53_4_zhongfei1_70_zhongfei2_20_medium_10_28.jpg",
+      "sha256": "49df7c3b07cf1ff4ae7cc72906d1a629029f026e830f10067c684aad8483a9ac",
+      "width": 3840,
+      "height": 2160,
+      "filename_group": "2026_08_06_53_4_zhongfei1_70_zhongfei2_20_medium_10",
+      "luma_mean_downsampled": 122.05,
+      "luma_std_downsampled": 52.01,
+      "assumed_scene_width_mm": 2400,
+      "calibration_status": "unmeasured_assumption",
+      "suggested_pile_roi_xywh": [
+        0.16,
+        0.22,
+        0.68,
+        0.56
+      ],
+      "roi_status": "generic_hint_requires_per_image_confirmation_not_mask",
+      "preserve_regions": [
+        "上部时间戳",
+        "底部机位标识",
+        "料斗边框"
+      ],
+      "lighting_policy": "按本张原图推断；不预设所有图共用固定主光方向"
+    },
+    {
+      "filename": "2026_08_06_53_4_zhongfei1_70_zhongfei2_20_medium_10_30.jpg",
+      "sha256": "25c2cc9163c82ecdd049dba321e3fd72075e4b711b0e11dc67f433979b12dda7",
+      "width": 3840,
+      "height": 2160,
+      "filename_group": "2026_08_06_53_4_zhongfei1_70_zhongfei2_20_medium_10",
+      "luma_mean_downsampled": 120.99,
+      "luma_std_downsampled": 50.54,
+      "assumed_scene_width_mm": 2400,
+      "calibration_status": "unmeasured_assumption",
+      "suggested_pile_roi_xywh": [
+        0.16,
+        0.22,
+        0.68,
+        0.56
+      ],
+      "roi_status": "generic_hint_requires_per_image_confirmation_not_mask",
+      "preserve_regions": [
+        "上部时间戳",
+        "底部机位标识",
+        "料斗边框"
+      ],
+      "lighting_policy": "按本张原图推断；不预设所有图共用固定主光方向"
+    },
+    {
+      "filename": "2026_08_06_53_4_zhongfei1_70_zhongfei2_20_medium_10_31.jpg",
+      "sha256": "09486776cb064e37133de9909d8f9398736887e8c330a14e15cbe9fc72e7b6c4",
+      "width": 3840,
+      "height": 2160,
+      "filename_group": "2026_08_06_53_4_zhongfei1_70_zhongfei2_20_medium_10",
+      "luma_mean_downsampled": 122.17,
+      "luma_std_downsampled": 54.12,
+      "assumed_scene_width_mm": 2400,
+      "calibration_status": "unmeasured_assumption",
+      "suggested_pile_roi_xywh": [
+        0.16,
+        0.22,
+        0.68,
+        0.56
+      ],
+      "roi_status": "generic_hint_requires_per_image_confirmation_not_mask",
+      "preserve_regions": [
+        "上部时间戳",
+        "底部机位标识",
+        "料斗边框"
+      ],
+      "lighting_policy": "按本张原图推断；不预设所有图共用固定主光方向"
+    },
+    {
+      "filename": "2026_08_06_53_4_zhongfei1_70_zhongfei2_20_medium_10_32.jpg",
+      "sha256": "b888ccc08a2f347dbfdeabec05cf4fd6a3f598d904c2b7b27efda65691061a9a",
+      "width": 3840,
+      "height": 2160,
+      "filename_group": "2026_08_06_53_4_zhongfei1_70_zhongfei2_20_medium_10",
+      "luma_mean_downsampled": 120.85,
+      "luma_std_downsampled": 55.16,
+      "assumed_scene_width_mm": 2400,
+      "calibration_status": "unmeasured_assumption",
+      "suggested_pile_roi_xywh": [
+        0.16,
+        0.22,
+        0.68,
+        0.56
+      ],
+      "roi_status": "generic_hint_requires_per_image_confirmation_not_mask",
+      "preserve_regions": [
+        "上部时间戳",
+        "底部机位标识",
+        "料斗边框"
+      ],
+      "lighting_policy": "按本张原图推断；不预设所有图共用固定主光方向"
+    },
+    {
+      "filename": "2026_08_06_53_4_zhongfei1_70_zhongfei2_20_medium_10_42.jpg",
+      "sha256": "b5627fcba746b31089d58d4f8f3d1951efb2f9b1a2a08baba70d1b761be688be",
+      "width": 3840,
+      "height": 2160,
+      "filename_group": "2026_08_06_53_4_zhongfei1_70_zhongfei2_20_medium_10",
+      "luma_mean_downsampled": 115.98,
+      "luma_std_downsampled": 57.23,
+      "assumed_scene_width_mm": 2400,
+      "calibration_status": "unmeasured_assumption",
+      "suggested_pile_roi_xywh": [
+        0.16,
+        0.22,
+        0.68,
+        0.56
+      ],
+      "roi_status": "generic_hint_requires_per_image_confirmation_not_mask",
+      "preserve_regions": [
+        "上部时间戳",
+        "底部机位标识",
+        "料斗边框"
+      ],
+      "lighting_policy": "按本张原图推断；不预设所有图共用固定主光方向"
+    },
+    {
+      "filename": "2026_08_06_53_4_zhongfei1_70_zhongfei2_20_medium_10_43.jpg",
+      "sha256": "bc30062d666ed6af15b47ef15c1f5fa75753b91c8f55446c64cc337c50f2e8a2",
+      "width": 3840,
+      "height": 2160,
+      "filename_group": "2026_08_06_53_4_zhongfei1_70_zhongfei2_20_medium_10",
+      "luma_mean_downsampled": 115.09,
+      "luma_std_downsampled": 58.71,
+      "assumed_scene_width_mm": 2400,
+      "calibration_status": "unmeasured_assumption",
+      "suggested_pile_roi_xywh": [
+        0.16,
+        0.22,
+        0.68,
+        0.56
+      ],
+      "roi_status": "generic_hint_requires_per_image_confirmation_not_mask",
+      "preserve_regions": [
+        "上部时间戳",
+        "底部机位标识",
+        "料斗边框"
+      ],
+      "lighting_policy": "按本张原图推断；不预设所有图共用固定主光方向"
+    },
+    {
+      "filename": "2026_08_06_53_4_zhongfei1_70_zhongfei2_20_medium_10_44.jpg",
+      "sha256": "da7b77a13d0397ccdf666c7fc6756fb1897c6c1a641b03f01c08e92654ba884f",
+      "width": 3840,
+      "height": 2160,
+      "filename_group": "2026_08_06_53_4_zhongfei1_70_zhongfei2_20_medium_10",
+      "luma_mean_downsampled": 118.9,
+      "luma_std_downsampled": 53.38,
+      "assumed_scene_width_mm": 2400,
+      "calibration_status": "unmeasured_assumption",
+      "suggested_pile_roi_xywh": [
+        0.16,
+        0.22,
+        0.68,
+        0.56
+      ],
+      "roi_status": "generic_hint_requires_per_image_confirmation_not_mask",
+      "preserve_regions": [
+        "上部时间戳",
+        "底部机位标识",
+        "料斗边框"
+      ],
+      "lighting_policy": "按本张原图推断；不预设所有图共用固定主光方向"
+    },
+    {
+      "filename": "2026_08_06_53_4_zhongfei1_70_zhongfei2_20_medium_10_8.jpg",
+      "sha256": "19392cc5764e91a388f697290e7460de48a19a3f7cb69f9fd6935413d25b0d05",
+      "width": 3840,
+      "height": 2160,
+      "filename_group": "2026_08_06_53_4_zhongfei1_70_zhongfei2_20_medium_10",
+      "luma_mean_downsampled": 120.86,
+      "luma_std_downsampled": 41.51,
+      "assumed_scene_width_mm": 2400,
+      "calibration_status": "unmeasured_assumption",
+      "suggested_pile_roi_xywh": [
+        0.16,
+        0.22,
+        0.68,
+        0.56
+      ],
+      "roi_status": "generic_hint_requires_per_image_confirmation_not_mask",
+      "preserve_regions": [
+        "上部时间戳",
+        "底部机位标识",
+        "料斗边框"
+      ],
+      "lighting_policy": "按本张原图推断；不预设所有图共用固定主光方向"
+    },
+    {
+      "filename": "2026_08_06_53_4_zhongfei1_70_zhongfei2_20_medium_10_9.jpg",
+      "sha256": "2d0d271d70e6e259c3657ce6628ff6c68fa1b395b8e28cd955452dae91db057e",
+      "width": 3840,
+      "height": 2160,
+      "filename_group": "2026_08_06_53_4_zhongfei1_70_zhongfei2_20_medium_10",
+      "luma_mean_downsampled": 120.05,
+      "luma_std_downsampled": 42.93,
+      "assumed_scene_width_mm": 2400,
+      "calibration_status": "unmeasured_assumption",
+      "suggested_pile_roi_xywh": [
+        0.16,
+        0.22,
+        0.68,
+        0.56
+      ],
+      "roi_status": "generic_hint_requires_per_image_confirmation_not_mask",
+      "preserve_regions": [
+        "上部时间戳",
+        "底部机位标识",
+        "料斗边框"
+      ],
+      "lighting_policy": "按本张原图推断；不预设所有图共用固定主光方向"
+    }
+  ]
+}

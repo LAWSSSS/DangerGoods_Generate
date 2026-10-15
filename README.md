@@ -1,5 +1,27 @@
 # 废钢背景异物合成数据生成工具
 
+## 逐件尺寸和 Prompt（2026-10-14）
+
+已建立桌面六视图目录中 **38 张参考图**的独立配置，背景目录共 **73 张**。当前 `config.yaml` 启用 `use_object_catalog: true`，从 `profiles/object_profiles.json` 读取单件尺寸/材质/遮挡与 prompt，六视图路径为 `/Users/liuzhaocheng/Desktop/六视图`。
+
+每件以 `S01`–`S38` 标识，不再只凭大类套用同一尺寸，也不混入同类其它型号的图。完整参数和逐件提示词在 [逐件手册](profiles/物品尺寸与Prompt逐件手册.md)，可编辑原始工作值在 [配置种子](profiles/object_profile_seeds.json)，独立文本在 `profiles/prompts/`。
+
+```bash
+python object_catalog.py --list
+python object_catalog.py --item S15
+python object_catalog.py --item S26 --output output/item_prompts/S26.txt
+# 下面会发送真实模型请求，仅在明确要生成且素材就绪时运行
+python generate_aliyun.py --objects S15 --total 1
+```
+
+工作尺寸包含参考范围和证据状态；多数不是实测。UCP210 可按型号表使用尺寸，其它未确认型号以可调整工作值开始。背景水平宽度 2.4m 沿用旧程序假设，未标定；画面占比同时考虑投影与遮挡，不把可见片段当成完整物体。
+
+已分别配置 DN25 小阀与 DN100/DN200/DN350 工业阀，立式/卧式储罐，三种千斤顶，空气与弹簧减震器。塑料、不锈钢、铝和橡胶不会统一处理为厚铁锈。新的专属 prompt 写在可写的 `profiles/` 中，保留原来只读的 `prompts/` 目录。
+
+修改 `profiles/object_profile_seeds.json` 后执行 `python tools/build_object_profiles.py` 可重建参数与文本。设 `use_object_catalog: false` 则恢复旧的按类别入口。当前只完成配置与离线验证，未调用生图/VLM API。
+
+---
+
 本项目基于阿里云百炼平台（Wan2.7-Image 模型 + Qwen-VLM），用于批量生成"废钢车斗背景 + 微小异物"的高仿真合成图片，主要面向废钢安检、异物检测、目标识别模型训练的数据增强场景。
 
 核心特点：
@@ -635,4 +657,4 @@ python generate_aliyun.py --total 100 --max-rounds 5
 | VLM 5轮优化 | ~0.12*6 + 0.02*6 = ~0.84元 | ~840元 | ~60秒/张 |
 
 > 实际成本以阿里云官方定价为准，以上仅为估算。
- 
+

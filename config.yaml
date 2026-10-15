@@ -186,7 +186,7 @@ object_anchor: "center"
 # 参考图禁止当贴图素材；没有六视图时用 input/objects 里同一类的多张实拍
 feed_object_views: true
 max_object_views: 3
-six_views_dir: "output/six_views"
+six_views_dir: "/Users/liuzhaocheng/Desktop/六视图"
 
 # VLM优化配置
 enable_vlm_optimization: true
@@ -211,3 +211,10 @@ timeout_seconds: 300
 sleep_seconds: 1.0
 total_num: 100
 seed: null
+use_object_catalog: true
+object_catalog_path: "profiles/object_profiles.json"
+background_catalog_path: "profiles/background_profiles.json"
+use_interactive_edit_region: true
+vlm_thinking_mode: "disabled"
+prepare_weathered_reference: true
+weathered_reference_rounds: 2
