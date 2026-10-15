@@ -1,5 +1,18 @@
 # 废钢背景异物合成数据生成工具
 
+## 手册驱动的受控融合入口（2026-10-15 / 0.3.0）
+
+新增 `fusion.py`：多物品完整投影 OBB、六类 Mask、支撑/局部遮挡、按部件旧化、背景像素保护、预算和哈希绑定验收。详见 [使用说明](docs/controlled-fusion-v2.md)、[手册实现映射](docs/manual-v2-implementation-matrix.md) 和 [版本说明](docs/CHANGELOG-controlled-fusion.md)。
+
+```bash
+python -B fusion.py --help
+python -B fusion.py provider-info --provider-config config_bailian.yaml
+python -B fusion.py plan config/controlled/rusted_S01_S20.draft.json \
+  --output work/manual-v2/my-plan
+```
+
+以上命令离线运行。当前 S01/S20 草案已关联用户的生锈六视图，缺少真实蒙版/支撑时返回 `INPUT_REQUIRED`。模型仍取自外部私有配置；只有显式 `run --generate` 才启动 API 请求。原始手册保存在 `docs/specifications/`；原有脚本说明见下文。
+
 ## 逐件尺寸和 Prompt（2026-10-14）
 
 已建立桌面六视图目录中 **38 张参考图**的独立配置，背景目录共 **73 张**。当前 `config.yaml` 启用 `use_object_catalog: true`，从 `profiles/object_profiles.json` 读取单件尺寸/材质/遮挡与 prompt，六视图路径为 `/Users/liuzhaocheng/Desktop/六视图`。

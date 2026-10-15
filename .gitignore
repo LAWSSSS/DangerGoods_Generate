@@ -21,3 +21,7 @@ work/
 
 # Debug payloads with signed URLs
 debug_response.json
+.fusion.local.json
+*.egg-info/
+build/
+dist/
