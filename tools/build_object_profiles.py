@@ -29,7 +29,9 @@ def save(path: Path, value) -> None:
 
 def build(seeds_path: Path, destination: Path) -> dict:
     seeds = json.loads(seeds_path.read_text(encoding="utf-8"))
-    reference_root = Path(seeds["reference_root"])
+    reference_root = Path(seeds["reference_root"]).expanduser()
+    if not reference_root.is_absolute():
+        reference_root = (ROOT / reference_root).resolve()
     background_root = (ROOT / seeds["background_root"]).resolve()
     assumed_width = seeds["assumed_scene_width_mm"]
     projection = [0.7, 1.0]
@@ -153,7 +155,7 @@ def build(seeds_path: Path, destination: Path) -> dict:
         "version": "1.1.0",
         "date": "2026-10-14",
         "units": "mm",
-        "reference_root": str(reference_root),
+        "reference_root": seeds["reference_root"],
         "background_root": str(background_root),
         "object_count": len(profiles),
         "background_count": len(background_records),

@@ -361,7 +361,11 @@ def load_catalog(
     data = json.loads(Path(path).read_text(encoding="utf-8"))
     if data.get("schema_version") != "1.0" or not isinstance(data.get("objects"), list):
         raise ValueError("物品目录格式不符合 1.0 约定")
-    root = Path(reference_root or data["reference_root"]).expanduser().resolve()
+    catalog_path = Path(path).resolve()
+    root = Path(reference_root or data["reference_root"]).expanduser()
+    if not root.is_absolute():
+        root = catalog_path.parent.parent / root
+    root = root.resolve()
     ids, names = set(), set()
     for profile in data["objects"]:
         identifier = profile["id"]
@@ -3555,7 +3559,7 @@ def load_app_config() -> AppConfig:
         size_tolerance=raw_app.get("size_tolerance", raw.get("size_tolerance", "class_range")),
         feed_object_views=bool(raw_app.get("feed_object_views", raw.get("feed_object_views", True))),
         max_object_views=int(raw_app.get("max_object_views", raw.get("max_object_views", 3))),
-        six_views_dir=base_dir / raw_app.get("six_views_dir", raw.get("six_views_dir", "output/six_views")),
+        six_views_dir=(base_dir / raw_app.get("six_views_dir", raw.get("six_views_dir", "input/objects/six_views"))).resolve(),
         use_interactive_edit_region=bool(raw_app.get("use_interactive_edit_region", True)),
         vlm_thinking_mode=raw_app.get("vlm_thinking_mode", "disabled"),
         prepare_weathered_reference=bool(raw_app.get("prepare_weathered_reference", True)),

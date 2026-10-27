@@ -87,7 +87,7 @@ python -B fusion.py plan config/controlled/rusted_S01_S20.draft.json \
 
 ## 逐件尺寸和 Prompt（2026-10-14）
 
-已建立桌面六视图目录中 **38 张参考图**的独立配置，背景目录共 **73 张**。当前 `config.yaml` 启用 `use_object_catalog: true`，从 `profiles/object_profiles.json` 读取单件尺寸/材质/遮挡与 prompt，六视图路径为 `/Users/liuzhaocheng/Desktop/六视图`。
+已建立 **38 张六视图**的独立配置，背景目录共 **73 张**。当前 `config.yaml` 启用 `use_object_catalog: true`，从 `profiles/object_profiles.json` 读取单件尺寸/材质/遮挡与 prompt。背景图在 `input/backgrounds`，实拍物品在 `input/objects`，六视图在 `input/objects/six_views`。
 
 每件以 `S01`–`S38` 标识，不再只凭大类套用同一尺寸，也不混入同类其它型号的图。完整参数和逐件提示词在 [逐件手册](profiles/物品尺寸与Prompt逐件手册.md)，可编辑原始工作值在 [配置种子](profiles/object_profile_seeds.json)，独立文本在 `profiles/prompts/`。
 

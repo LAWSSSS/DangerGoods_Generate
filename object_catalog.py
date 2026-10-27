@@ -24,7 +24,11 @@ def load_catalog(
     data = json.loads(Path(path).read_text(encoding="utf-8"))
     if data.get("schema_version") != "1.0" or not isinstance(data.get("objects"), list):
         raise ValueError("物品目录格式不符合 1.0 约定")
-    root = Path(reference_root or data["reference_root"]).expanduser().resolve()
+    catalog_path = Path(path).resolve()
+    root = Path(reference_root or data["reference_root"]).expanduser()
+    if not root.is_absolute():
+        root = catalog_path.parent.parent / root
+    root = root.resolve()
     ids, names = set(), set()
     for profile in data["objects"]:
         identifier = profile["id"]

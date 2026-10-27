@@ -186,7 +186,7 @@ object_anchor: "center"
 # 参考图禁止当贴图素材；没有六视图时用 input/objects 里同一类的多张实拍
 feed_object_views: true
 max_object_views: 3
-six_views_dir: "/Users/liuzhaocheng/Desktop/六视图"
+six_views_dir: "input/objects/six_views"
 
 # VLM优化配置
 enable_vlm_optimization: true

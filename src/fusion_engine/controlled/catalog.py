@@ -30,9 +30,12 @@ def from_catalog(
     background_info = image_info(background)
     for index, oid in enumerate(ids):
         item = lookup[oid]
-        reference = reference_overrides.get(
-            oid, Path(catalog["reference_root"]) / item["reference_filename"]
-        )
+        reference = reference_overrides.get(oid)
+        if reference is None:
+            root = Path(catalog["reference_root"]).expanduser()
+            if not root.is_absolute():
+                root = catalog_path.resolve().parent.parent / root
+            reference = root / item["reference_filename"]
         if not reference.is_file():
             raise ConfigError(f"参考文件不存在：{reference.name}")
         material = item.get("material", "unknown")

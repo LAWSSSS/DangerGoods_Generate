@@ -2,7 +2,7 @@
   "schema_version": "1.0",
   "units": "mm",
   "assumed_scene_width_mm": 2400,
-  "reference_root": "/Users/liuzhaocheng/Desktop/六视图",
+  "reference_root": "input/objects/six_views",
   "background_root": "input/backgrounds",
   "dimension_status_default": "estimated_working_dimensions_not_measured",
   "objects": [

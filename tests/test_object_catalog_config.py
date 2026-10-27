@@ -107,7 +107,7 @@ def test_reference_collection_never_adds_another_same_class_item():
         selected["class"],
         items,
         3,
-        Path("/Users/liuzhaocheng/Desktop/六视图"),
+        ROOT / "input/objects/six_views",
     )
     assert views == [selected["path"]]
 
@@ -159,7 +159,7 @@ def test_config_load_enables_catalog_without_printing_credentials():
     ):
         cfg = engine.load_app_config()
     assert len(cfg.object_catalog["objects"]) == 38
-    assert cfg.six_views_dir == Path("/Users/liuzhaocheng/Desktop/六视图")
+    assert cfg.six_views_dir == (ROOT / "input/objects/six_views").resolve()
     assert "fake-ali-credential" not in output.getvalue()
     assert "fake-huoshan-credential" not in output.getvalue()
     assert "fake-ali-credential" not in repr(cfg)
