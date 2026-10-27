@@ -1777,6 +1777,31 @@ def sample_horizontal_orientation() -> Dict[str, Any]:
 
 # ============ 物体图片加载器 ============
 
+def six_view_object_items(six_views_dir: Path, catalog_path: Path) -> List[Dict[str, Any]]:
+    """关闭逐件目录时，输入仍是同一套六视图，每张图只代表一件。"""
+    data = json.loads(catalog_path.read_text(encoding="utf-8"))
+    class_alias = {"阀门": "球阀"}
+    items: List[Dict[str, Any]] = []
+    missing = []
+    for profile in data.get("objects", []):
+        path = six_views_dir / profile["reference_filename"]
+        if not path.is_file():
+            missing.append(profile["reference_filename"])
+            continue
+        category = str(profile["category"])
+        items.append({
+            "path": path,
+            "class": class_alias.get(category, category),
+            "weight": 1.0,
+            "filename": path.name,
+            "profile_id": profile["id"],
+        })
+    if missing:
+        print("[WARNING] 六视图缺失: " + ", ".join(missing))
+    print(f"[DEBUG] 六视图输入: {len(items)} 张，目录 {six_views_dir}")
+    return items
+
+
 def get_all_object_images_with_classes(object_root: Path, prompt_templates: Dict[str, List[str]]) -> List[Dict[str, Any]]:
     object_items = []
     
@@ -3711,7 +3736,10 @@ def main() -> None:
 
     object_items = (
         per_item_catalog_items(cfg.object_catalog) if cfg.object_catalog
-        else get_all_object_images_with_classes(cfg.objects_dir, prompt_templates)
+        else six_view_object_items(
+            cfg.six_views_dir,
+            Path(__file__).resolve().parent / "profiles/object_profiles.json",
+        )
     )
     if not object_items:
         raise FileNotFoundError(f"No object images found in {cfg.objects_dir}")
