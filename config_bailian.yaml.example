@@ -2,18 +2,7 @@
 api_key_ali: "YOUR_ALIYUN_TOKEN_PLAN_KEY"
 api_key_huoshan: "YOUR_HUOSHAN_ARK_KEY"
 
-# 模型选择
-# 默认走路由函数；route 暂时留空时，使用下面的 model / vlm_model
-# 若 config.yaml 也写了同名字段，优先用 config.yaml
-route: ""
-
-# 生图模型（route 为空时生效）
-# 可选：wan2.7-image / wan2.7-image-pro / doubao-seedream-5.0-lite / doubao-seedream-5.0-pro
-model: "wan2.7-image"
-
-# VLM 模型（route 为空时生效）
-# 可选：qwen3.8-flash / qwen3.8-max / doubao-seed-2.1-pro
-vlm_model: "qwen3.8-flash"
+# 可用模型、密钥和地址。实际用哪一个由 config.yaml 的 model / vlm_model 决定。
 
 # 图像生成模型组
 ###阿里百炼

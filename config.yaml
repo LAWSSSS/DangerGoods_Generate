@@ -1,14 +1,11 @@
-# 模型选择
-# 默认走路由函数；route 暂时留空时，使用下面的 model / vlm_model
-route: ""
-
-# 生图模型（route 为空时生效）
-# 可选：wan2.7-image / wan2.7-image-pro / doubao-seedream-5.0-lite / doubao-seedream-5.0-pro
+# 实际使用的模型只在这里选择。config_bailian.yaml 只提供密钥、地址和可用模型名单。
+# 生图可选：wan2.7-image / wan2.7-image-pro / doubao-seedream-5.0-pro
 model: "wan2.7-image"
 
-# VLM 模型（route 为空时生效）
-# 可选：qwen3.8-flash / qwen3.8-max / doubao-seed-2.1-pro
-vlm_model: "doubao-seed-2.1-pro"
+# VLM 必须与生图同一系列。
+# 千问可选：qwen3.8-flash / qwen3.8-max
+# 豆包可选：doubao-seed-2.1-pro
+vlm_model: "qwen3.8-flash"
 
 # 图像参数
 size: "2K"

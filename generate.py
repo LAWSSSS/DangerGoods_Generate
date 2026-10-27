@@ -52,23 +52,24 @@ def series_of_vlm(name: str) -> Optional[str]:
     return None
 
 def handoff_to_series(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
-    """同一套参数。生图模型决定系列；没写生图模型时才用 VLM 判断。"""
-    image_name = args.model or str(load_app_raw().get("model") or "")
+    """同一套参数。用哪一个模型只看 config.yaml，命令行只覆盖这一次。"""
+    app = load_app_raw()
+    image_name = (args.model or str(app.get("model") or "")).strip()
+    vlm_name = (args.vlm_model or str(app.get("vlm_model") or "")).strip()
     series = series_of_image_model(image_name) if image_name else None
+    if series is None and vlm_name:
+        series = series_of_vlm(vlm_name)
     if series is None:
-        vlm_name = args.vlm_model or str(load_app_raw().get("vlm_model") or "")
-        series = series_of_vlm(vlm_name) if vlm_name else None
-    if series is None:
-        parser.error("无法从生图模型或 VLM 判断是豆包还是千问")
+        parser.error("请在 config.yaml 设置 model 和 vlm_model")
     if args.model and series_of_image_model(args.model) != series:
         parser.error("生图模型与所选系列不一致")
     if series != THIS_SERIES:
         target = Path(__file__).resolve().parent / OTHER_SCRIPT
         os.execv(sys.executable, [sys.executable, str(target), *sys.argv[1:]])
-    if args.vlm_model and series_of_vlm(args.vlm_model) != THIS_SERIES:
+    if vlm_name and series_of_vlm(vlm_name) != THIS_SERIES:
         parser.error("VLM 与生图模型不是同一系列")
     try:
-        image_model, vlm_model = models_for_this_series(args.model or image_name, args.vlm_model)
+        image_model, vlm_model = models_for_this_series(image_name, vlm_name)
     except ValueError as exc:
         parser.error(str(exc))
     global CHOSEN_IMAGE, CHOSEN_VLM
@@ -3396,14 +3397,19 @@ def route_models(raw_bailian: Dict[str, Any], raw_app: Dict[str, Any]) -> Option
     return None
 
 def select_models(raw_bailian: Dict[str, Any], raw_app: Dict[str, Any]) -> Tuple[str, str]:
-    del raw_bailian, raw_app
-    print(f"[DEBUG] 模型来源: {THIS_SERIES} -> {CHOSEN_IMAGE} / {CHOSEN_VLM}")
-    return CHOSEN_IMAGE, CHOSEN_VLM
+    """实际使用的模型只取 config.yaml，不读 config_bailian.yaml 的模型名。"""
+    del raw_bailian
+    image = str(raw_app.get("model") or "").strip()
+    vlm = str(raw_app.get("vlm_model") or "").strip()
+    print(f"[DEBUG] 模型来源: config.yaml -> {image} / {vlm}")
+    return models_for_this_series(image, vlm)
 
 def models_for_this_series(image_model: Optional[str], vlm_model: Optional[str]) -> Tuple[str, str]:
     """只接受本系列、并且十一点配置里已经出现过的模型名。"""
-    image = image_model or DEFAULT_IMAGE
-    vlm = vlm_model or DEFAULT_VLM
+    image = (image_model or "").strip()
+    vlm = (vlm_model or "").strip()
+    if not image or not vlm:
+        raise ValueError("请在 config.yaml 设置 model 和 vlm_model")
     if image not in ALLOWED_IMAGES or vlm not in ALLOWED_VLMS:
         raise ValueError(
             f"{THIS_SERIES} 只接受生图 {list(ALLOWED_IMAGES)}，VLM {list(ALLOWED_VLMS)}"
@@ -3567,7 +3573,10 @@ def main() -> None:
 
     if args.model or args.vlm_model:
         try:
-            image_model, vlm_model = models_for_this_series(args.model, args.vlm_model)
+            image_model, vlm_model = models_for_this_series(
+            args.model or cfg.model,
+            args.vlm_model or cfg.vlm_model,
+        )
         except ValueError as exc:
             parser.error(str(exc))
         global CHOSEN_IMAGE, CHOSEN_VLM
