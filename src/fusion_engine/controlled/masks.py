@@ -66,16 +66,19 @@ def read_mask(
         }
     canvas = Image.new("L", (width, height), 0)
     drawing = ImageDraw.Draw(canvas)
-    for polygon in descriptor["polygons"]:
-        points = np.asarray(polygon, float) * [width, height]
-        if abs(cv2.contourArea(points.astype(np.float32))) < 0.5:
-            raise ConfigError("Mask 多边形退化，不能表示可验证轮廓")
-        drawing.polygon(
-            [(min(width - 1, round(x)), min(height - 1, round(y))) for x, y in points], fill=255
-        )
+    for key, fill in (("polygons", 255), ("exclude_polygons", 0)):
+        for polygon in descriptor.get(key, []):
+            points = np.asarray(polygon, float) * [width, height]
+            if abs(cv2.contourArea(points.astype(np.float32))) < 0.5:
+                raise ConfigError("Mask 多边形退化，不能表示可验证轮廓")
+            drawing.polygon(
+                [(min(width - 1, round(x)), min(height - 1, round(y))) for x, y in points],
+                fill=fill,
+            )
     return np.array(canvas) == 255, {
         "method": "supplied_polygons_rasterized",
         "polygons": descriptor["polygons"],
+        "exclude_polygons": descriptor.get("exclude_polygons", []),
         "evidence": descriptor["evidence"],
         "pixel_convention": "round(x*width), round(y*height), clamped_to_last_pixel",
     }
@@ -192,15 +195,66 @@ def build_masks(job: ControlledJob, shape: tuple[int, int]) -> MaskBundle:
             diagnostics.append(
                 issue("MISSING_FOREGROUND_OCCLUSION", "FAIL", "任务要求原前景遮挡，但交集为空", oid)
             )
+        spatial = item.get("spatial_constraints", {})
+        interval = spatial.get("occluded_fraction_range")
+        if interval and value["obj_full"].any():
+            fraction = float(occluded.sum() / value["obj_full"].sum())
+            if not interval[0] <= fraction <= interval[1]:
+                diagnostics.append(
+                    issue(
+                        "OCCLUSION_FRACTION",
+                        "FAIL",
+                        f"计划遮挡比例 {fraction:.4f} 超出声明区间",
+                        oid,
+                    )
+                )
+        if "forbidden" in spatial:
+            forbidden, record = read_mask(job, spatial["forbidden"], shape)
+            sources.append({"object_id": oid, "mask": "forbidden", **record})
+            overlap = int((value["obj_full"] & forbidden).sum())
+            if overlap:
+                diagnostics.append(
+                    issue(
+                        "FORBIDDEN_INTERSECTION",
+                        "FAIL",
+                        f"完整投影进入明确禁入区 {overlap} 像素；需重新落位",
+                        oid,
+                    )
+                )
+            if require_confirmed and not evidence_confirmed(spatial["forbidden"]["evidence"]):
+                diagnostics.append(issue("UNCONFIRMED_FORBIDDEN", "UNKNOWN", "禁入区尚未审核", oid))
+        minimum = spatial.get("minimum_contact_count")
+        if minimum and len(item["support_contacts"]) < minimum:
+            diagnostics.append(
+                issue("CONTACT_COUNT", "FAIL", "支点数量不足，不能靠扩大阴影代替支撑", oid)
+            )
         required_edit = visible | value["contact"]
         allowed_edit = required_edit.copy()
         if radius:
             kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (radius * 2 + 1, radius * 2 + 1))
             allowed_edit |= cv2.dilate(visible.astype(np.uint8), kernel).astype(bool)
+        if "edit_envelope" in spatial:
+            envelope, record = read_mask(job, spatial["edit_envelope"], shape)
+            sources.append({"object_id": oid, "mask": "edit_envelope", **record})
+            if not job.data.get("candidate_geometry"):
+                raise ConfigError("独立编辑包络需要候选形状诊断；不能用更大区域代替实际物体轮廓")
+            if not envelope.any() or np.any(required_edit & ~envelope & ~explicit_protect):
+                diagnostics.append(
+                    issue(
+                        "EDIT_ENVELOPE_INCOMPLETE", "FAIL", "编辑包络没有覆盖形状目标与接触区", oid
+                    )
+                )
+            if require_confirmed and not evidence_confirmed(spatial["edit_envelope"]["evidence"]):
+                diagnostics.append(
+                    issue("UNCONFIRMED_EDIT_ENVELOPE", "UNKNOWN", "独立编辑包络尚未审核", oid)
+                )
+            allowed_edit = envelope
         if "edit" not in item["masks"]:
             value["edit"] = allowed_edit & ~explicit_protect
             source_map[oid]["edit"] = {
-                "method": "visible_union_contact_plus_boundary_band",
+                "method": "explicit_edit_envelope"
+                if "edit_envelope" in spatial
+                else "visible_union_contact_plus_boundary_band",
                 "radius_px": radius,
                 "ground_truth_claim": False,
             }
@@ -272,4 +326,19 @@ def placement_preview(scene: np.ndarray, job: ControlledJob, bundle: MaskBundle)
         cv2.putText(
             canvas, item["id"], tuple(points[0]), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (40, 220, 70), 2
         )
+        spatial = item.get("spatial_constraints", {})
+        if "forbidden" in spatial:
+            forbidden, _ = read_mask(job, spatial["forbidden"], (height, width))
+            canvas[forbidden] = (0.6 * canvas[forbidden] + 0.4 * np.array([240, 40, 40])).astype(
+                np.uint8
+            )
+        for contact in item["support_contacts"]:
+            point = tuple(np.rint(np.array(contact["point"]) * [width, height]).astype(int))
+            cv2.circle(canvas, point, 9, (255, 230, 0), 3)
+    for anchor in job.data["harmonization"].get("paired_anchors", []):
+        region, _ = read_mask(job, anchor["mask"], (height, width))
+        contours, _ = cv2.findContours(
+            region.astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
+        )
+        cv2.drawContours(canvas, contours, -1, (30, 230, 230), 3)
     return canvas

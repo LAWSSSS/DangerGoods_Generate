@@ -215,9 +215,9 @@ def worker(run_string, job):
                         # Avoid the baseline's unrecorded SSL fallback POST.
                         raise RuntimeError(f"VLM transport failed: {exc}") from exc
 
-                def evaluate_generated_image(self, image_path, cls, prompt, target_ratio=None):
+                def evaluate_generated_image(self, image_path, cls, prompt, target_ratio=None, **kwargs):
                     state["stage"] = f"evaluation_round_{len(result['rounds'])}"
-                    old = super().evaluate_generated_image(image_path, cls, prompt, target_ratio)
+                    old = super().evaluate_generated_image(image_path, cls, prompt, target_ratio, **kwargs)
                     row = result["rounds"][-1]
                     row["baseline_evaluation"] = dict(old)
                     row["baseline_evaluation_valid"] = strict_old_evaluation(old, state["qwen_ok"])

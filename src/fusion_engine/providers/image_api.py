@@ -15,11 +15,20 @@ from fusion_engine.providers.transport import ProviderTransport
 
 
 def image_data_url(
-    path: Path, max_pixels: int = 4_194_304, min_side: int = 0
+    path: Path,
+    max_pixels: int = 4_194_304,
+    min_side: int = 0,
+    crop_rect: tuple[int, int, int, int] | None = None,
 ) -> tuple[str, dict[str, Any]]:
     with Image.open(path) as source:
         image = ImageOps.exif_transpose(source)
         original_size = image.size
+        if crop_rect is not None:
+            x0, y0, x1, y1 = crop_rect
+            if not (0 <= x0 < x1 <= image.width and 0 <= y0 < y1 <= image.height):
+                raise AdapterError("上下文裁切超出原始画布")
+            image = image.crop(crop_rect)
+        source_size = image.size
         if "A" in image.getbands() or (image.mode == "P" and "transparency" in image.info):
             rgba = image.convert("RGBA")
             canvas = Image.new("RGBA", rgba.size, "white")
@@ -51,6 +60,8 @@ def image_data_url(
         "path": str(path),
         "original_size": list(original_size),
         "sent_size": list(image.size),
+        "source_size_before_resize": list(source_size),
+        "crop_rect_original_pixels": list(crop_rect) if crop_rect else None,
         "encoding": "PNG_RGB8",
         "max_input_pixels": max_pixels,
     }

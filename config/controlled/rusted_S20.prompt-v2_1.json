@@ -1,0 +1,262 @@
+{
+  "schema_version": "2.0",
+  "task_id": "prompt_v2_1_preview_S20",
+  "workspace": "../..",
+  "mode": "A",
+  "background": {
+    "path": "input/backgrounds/2026_08_06_36_1_zhongfei1_95_zhongfei2_5_19.jpg",
+    "sha256": "91dc02b70ca851caceef765e5b2f46f8ead3a7784aa474d7d1b71f52337b624e",
+    "width": 3840,
+    "height": 2160,
+    "description": "用户提供的原始场景；叠字/前景/承载区需标注",
+    "protect": {
+      "polygons": [
+        [
+          [
+            0.01,
+            0.005
+          ],
+          [
+            0.43,
+            0.005
+          ],
+          [
+            0.43,
+            0.1
+          ],
+          [
+            0.01,
+            0.1
+          ]
+        ],
+        [
+          [
+            0.7,
+            0.8
+          ],
+          [
+            0.88,
+            0.8
+          ],
+          [
+            0.88,
+            0.91
+          ],
+          [
+            0.7,
+            0.91
+          ]
+        ],
+        [
+          [
+            0.15,
+            0.89
+          ],
+          [
+            0.22,
+            0.89
+          ],
+          [
+            0.22,
+            0.97
+          ],
+          [
+            0.15,
+            0.97
+          ]
+        ]
+      ],
+      "coordinate_space": "normalized_original_background",
+      "evidence": {
+        "source": "proposal",
+        "confirmed": false,
+        "notes": "根据可见叠字位置建立预览保护ROI，不是物体分割/遮挡真值"
+      }
+    }
+  },
+  "objects": [
+    {
+      "id": "S20",
+      "category": "DN100 蓝手轮双法兰截止阀",
+      "references": [
+        {
+          "path": "/Users/liuzhaocheng/Desktop/生锈六视图/01_DN100_手轮阀_重度生锈六视图.png",
+          "view_id": "atlas",
+          "sha256": "22686a218ede38085308d73ffac15486129ed9ef0e00cb65c33eba1618aa76ae",
+          "source_kind": "rusted_atlas",
+          "orientation_hint": "六视图仅表示同一物体；不作为正交三维测量",
+          "complete": true
+        }
+      ],
+      "dimensions": {
+        "status": "estimated",
+        "units": "mm",
+        "values": {
+          "面对面长": 300,
+          "含手轮总高": 430,
+          "法兰外径": 220
+        },
+        "ranges": {
+          "含手轮总高": [
+            350,
+            550
+          ]
+        },
+        "evidence": {
+          "source": "estimate",
+          "confirmed": false,
+          "notes": "DN100为六视图可见文字，未确认实物型号或压力级。"
+        }
+      },
+      "identity": {
+        "level": "instance",
+        "critical_parts": [
+          "蓝色水平手轮",
+          "升降阀杆/轭架",
+          "双侧法兰",
+          "六视图DN100字样"
+        ],
+        "positive": [
+          "蓝色水平手轮",
+          "升降阀杆/轭架",
+          "双侧法兰",
+          "六视图DN100字样"
+        ],
+        "negative": [
+          "套用DN350阀尺寸",
+          "改成蓝扳手螺纹小球阀",
+          "丢掉轭架"
+        ]
+      },
+      "material_parts": [
+        {
+          "id": "body",
+          "base_material": "unknown",
+          "evidence": {
+            "source": "proposal",
+            "confirmed": false,
+            "notes": "从旧目录迁移的材质提示；需补充橡胶/玻璃/塑料等独立部件",
+            "confidence": 0.2
+          }
+        }
+      ],
+      "ageing": {
+        "level": 3,
+        "exposure_history": "场景中长期弃置；具体暴露史待确认",
+        "allow_structural_damage": false
+      },
+      "placement": {
+        "box_type": "oriented",
+        "coordinate_space": "normalized_original_background",
+        "center": [
+          0.66,
+          0.61
+        ],
+        "width": 0.075,
+        "height": 0.19,
+        "rotation_deg": 18,
+        "allow_crop": false,
+        "status": "proposed",
+        "evidence": {
+          "source": "proposal",
+          "confirmed": false,
+          "notes": "本次效果预览的图像空间摆放建议，未经物理尺度/承载核验",
+          "confidence": 0.3
+        },
+        "scale": {
+          "level": 0,
+          "evidence": {
+            "source": "proposal",
+            "confirmed": false,
+            "notes": "未沿用 2.4m 料斗跨度假设；实际尺度参照待补充",
+            "confidence": 0.2
+          }
+        }
+      },
+      "masks": {},
+      "support_contacts": [],
+      "render_class": "opaque_rigid",
+      "prompt_directives": {
+        "identity": [
+          "手轮—外露阀杆—开式轭架—阀盖连接连续，法兰与阀体方向一致，保留参考中的连接形状。"
+        ],
+        "appearance": [
+          "手轮只留黯淡灰蓝残漆，粉尘和既有氧化降低色彩纯度；避免干净亮蓝的完整色圈。",
+          "阀体沿用参考可见的暗褐腐蚀、积灰和污旧层，在现场呈低饱和灰褐/污褐层次；避免金铜色发亮外壳或新增洁净银白面。基材待核验，不指定为黄铜或碳钢。",
+          "法兰边缘、凸字和螺纹的亮暗对比服从同深度监控画质，保留可辨结构，避免在灰雾废钢中形成独立超锐轮廓。"
+        ],
+        "contact": [
+          "选择原图目标位置的厚钢件承接法兰下缘，先让可见几何真实相接，再在接触缝局部压暗。阀门下方保留可辨的邻近承载关系，避免只加悬空黑影。"
+        ],
+        "occlusion": [
+          "原有斜长钢板位于阀体前方，遮住阀体下部约15%–35%；保持钢板原轮廓连续，被挡住的阀体不能越过钢板前缘；手轮、阀杆与轭架的关键连接仍应可辨。"
+        ]
+      }
+    }
+  ],
+  "scene": {
+    "lighting": "目标位置的受光、阴面与投影沿用原图附近废钢的明暗；保留现有局部遮蔽和柔和环境填充，不新增独立补光。",
+    "camera_style": "沿用这帧现场监控的灰雾过渡、有限细节、噪声与压缩质感；新物体与同深度废钢保持相称的局部对比和边缘清晰度。",
+    "support_regions": [],
+    "occlusion_edges": [],
+    "evidence": {
+      "source": "proposal",
+      "confirmed": false,
+      "notes": "待场景分析；未执行深度估计和三维重建",
+      "confidence": 0.2
+    }
+  },
+  "constraints": {
+    "require_support": true,
+    "require_foreground_occlusion": true,
+    "require_confirmed_masks": true,
+    "background_protection": "none",
+    "require_stability_evidence": true
+  },
+  "generator": {
+    "adapter": "bailian",
+    "route": "concept",
+    "output_registration": "resize_same_aspect"
+  },
+  "budget": {
+    "max_image_calls": 1,
+    "max_vlm_calls": 1,
+    "max_candidates": 1
+  },
+  "harmonization": {
+    "mode": "none",
+    "blur_sigma_px": 0,
+    "noise_std": 0,
+    "feather_radius_px": 0
+  },
+  "evaluation": {
+    "center_error_max": 0.02,
+    "scale_log_error_max": 0.25,
+    "rotation_error_max_deg": 10,
+    "mask_iou_min": 0.8,
+    "contact_gap_max_px": 4,
+    "min_changed_visible_fraction": 0.02,
+    "required_visual_checks": [
+      "identity",
+      "support",
+      "occlusion",
+      "material",
+      "lighting",
+      "style",
+      "object_count",
+      "realism"
+    ],
+    "require_observed_masks": true
+  },
+  "output_dir": "output/prompt-v2_1-previews",
+  "prompt_directives": {
+    "scene_style": [
+      "当前目标附近主要是覆灰的灰褐、灰粉和冷灰废钢，物体呈现相近的低饱和、蒙灰与局部受光层次。绿色篷布只在面向它的表面形成弱环境反射，不把整件物体染绿。",
+      "沿用这帧监控的灰雾、较平的局部对比、亮部略泛白和有限细节；阴面仍有环境填充，不单独给物体增加鲜艳、深黑或锐亮的对比。",
+      "保持原图灰钢、绿色篷布与整体曝光。通过新物体的材质响应和局部成像适应背景，不把背景压暗、染色或柔化来衬托物体。"
+    ],
+    "negative": [
+      "与该位置覆灰废钢不相称的鲜艳残漆、亮金属外壳、过清晰凸字、独立暖色光和高对比亮边。"
+    ]
+  }
+}

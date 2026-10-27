@@ -1,5 +1,7 @@
 """TLS-verified HTTP; credentials only enter an API request's Authorization header."""
 
+from __future__ import annotations
+
 import re
 from typing import Any
 from urllib.parse import urlsplit

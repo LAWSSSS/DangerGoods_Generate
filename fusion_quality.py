@@ -49,10 +49,140 @@ WEATHERING = {
 }
 
 
+APPEARANCE_KEYS = ("color_temperature", "tone", "saturation", "pixel", "sharpness")
+APPEARANCE_MATCHES = (
+    ("color_temperature_match", "色温修正", "describe_color_temperature", "color_temperature"),
+    ("tone_match", "色调修正", "describe_tone", "tone"),
+    ("saturation_match", "饱和度修正", "describe_saturation", "saturation"),
+    ("pixel_match", "像素修正", "describe_pixel", "pixel"),
+    ("sharpness_match", "清晰度修正", "describe_sharpness", "sharpness"),
+)
+
+
+def _observed(value: Any, fallback: str) -> str:
+    text = str(value or "").strip()
+    return text if len(text) >= 2 else fallback
+
+
+def describe_color_temperature(color_temperature: str = "") -> str:
+    """色温只写白平衡和冷暖，不写色相。"""
+    observed = _observed(color_temperature, "与相邻废钢相同的冷暖和白平衡")
+    return (
+        f"观察：{observed}。"
+        "高光、中间调、阴影共用这一套白平衡；"
+        "金属高光不另加暖黄或橙色，阴影不另加青蓝或冷紫；"
+        "异物与废钢交界处冷暖连续，不能出现一圈独立色温，异物本身不能单独偏暖或偏冷。"
+    )
+
+
+def describe_tone(tone: str = "") -> str:
+    """色调只写色相和明度。饱和度是单独一项。"""
+    observed = _observed(tone, "铁锈红、深灰、暗褐，明度不高于周围废钢")
+    return (
+        f"观察：{observed}。"
+        "只看色相和明度，跟相邻废钢，不跳纯色，不加更亮的边。"
+        "不要在这句里写饱和度，也不要写冷暖。"
+    )
+
+
+def describe_saturation(saturation: str = "") -> str:
+    """饱和度必须发灰，并且明显低于相邻废钢。"""
+    observed = _observed(saturation, "发灰、蒙尘、褪色，明显低于周围废钢")
+    return (
+        f"观察：{observed}。"
+        "饱和度必须再压低一档，明显低于相邻废钢，看起来发灰、发浊、蒙尘、褪色；"
+        "宁可几乎看不出原来的颜色，也不要鲜艳；"
+        "禁止鲜红、橘红、亮黄、翠绿、纯蓝、荧光色和高饱和色块；"
+        "商品原色只留一点色相，其余混进灰尘和铁锈灰。"
+    )
+
+
+def describe_pixel(pixel: str = "") -> str:
+    """像素只写颗粒、压缩和局部对比，不写清不清楚。"""
+    observed = _observed(pixel, "颗粒粗、压缩块明显、局部对比低")
+    return (
+        f"观察：{observed}。"
+        "异物的像素细节必须低于监控原图：采样更粗，颗粒更大，压缩块更明显，局部对比更低；"
+        "细线、锈点和刻字不能比相邻废钢分得更开；"
+        "和原图像素相同仍然偏高，要再粗一档。"
+        "禁止高清贴图、干净边缘和无噪点表面。"
+    )
+
+
+def describe_sharpness(sharpness: str = "") -> str:
+    """清晰度只写失焦和拖影。不把整张监控图再柔化。"""
+    observed = _observed(sharpness, "没有拖影时保持轻微失焦和发软边缘")
+    return (
+        f"观察：{observed}。"
+        "如果废钢边缘沿同一方向被拉糊，那是拍摄时相机晃动，异物必须带同样方向、同样长度的运动模糊；"
+        "没有拖影时，也要保持同样的失焦和发软边缘。"
+        "异物不能更锐，不能在发糊的画面里突然清晰。"
+        "只改异物，不要把整张监控图再柔化、降分辨率或二次渲染发糊。"
+    )
+
+
+def appearance_from_context(context: dict[str, Any] | None) -> dict[str, str]:
+    source = context or {}
+    return {key: str(source.get(key) or "").strip() for key in APPEARANCE_KEYS}
+
+
+def appearance_prompt_block(appearance: dict[str, str] | None = None) -> str:
+    observed = appearance or {}
+    return "\n".join([
+        f"【色温】{describe_color_temperature(observed.get('color_temperature', ''))}",
+        f"【色调】{describe_tone(observed.get('tone', ''))}",
+        f"【饱和度】{describe_saturation(observed.get('saturation', ''))}",
+        f"【像素】{describe_pixel(observed.get('pixel', ''))}",
+        f"【清晰度】{describe_sharpness(observed.get('sharpness', ''))}",
+    ])
+
+
+def normalize_appearance_match(value: Any) -> str:
+    text = str(value or "").strip().lower()
+    if text in {"bad", "poor", "差", "不匹配", "不一致", "失败"}:
+        return "bad"
+    if text in {"good", "很好", "匹配", "一致"}:
+        return "good"
+    return "ok"
+
+
+def appearance_is_bad(evaluation: dict[str, Any]) -> bool:
+    return any(
+        normalize_appearance_match(evaluation.get(match_key)) == "bad"
+        for match_key, _label, _method, _obs in APPEARANCE_MATCHES
+    )
+
+
+def appearance_correction_text(
+    evaluation: dict[str, Any], appearance: dict[str, str] | None
+) -> str:
+    """只把判为 bad 的那一项写成对应的生图要求，不改写禁令用词。"""
+    observed = appearance or {}
+    writers = {
+        "describe_color_temperature": describe_color_temperature,
+        "describe_tone": describe_tone,
+        "describe_saturation": describe_saturation,
+        "describe_pixel": describe_pixel,
+        "describe_sharpness": describe_sharpness,
+    }
+    parts: list[str] = []
+    for match_key, label, method, obs_key in APPEARANCE_MATCHES:
+        if normalize_appearance_match(evaluation.get(match_key)) != "bad":
+            continue
+        parts.append(f"【{label}】{writers[method](observed.get(obs_key, ''))}")
+    if not parts:
+        return ""
+    return (
+        "\n".join(parts)
+        + "\n把每一项修正写成对应的画面要求：色温不写色相，色调不写冷暖也不写饱和度，"
+        "饱和度必须发灰且明显低于废钢，像素不写清不清楚，清晰度不写噪点。"
+        "不要要求柔化整张图，也不要替换禁止鲜红、青蓝、橙色这类原词。"
+    )
+
+
 def scene_context_prompt(context: dict[str, Any] | None) -> str:
     labels = {
         "lighting": "当前光照与方向",
-        "tone": "当前局部色调",
         "contrast": "当前明暗和反射强度",
         "capture_style": "当前成像风格与噪声",
         "surface_condition": "附近废料的旧化状态",
@@ -78,7 +208,12 @@ def review_requirements() -> str:
         "若仍是新漆、亮银干净新品、摄影棚高光或只有装饰性几个锈点，new_appearance_detected=true且weathering_score不得高于60。"
         "检查物品是否有真实承重支点、至少部分轮廓被原有前景钢件截断、贴合接触阴影；"
         "完整展品摆在堆顶、悬浮、边缘光晕、轮廓全露或独立黑描边判pasted_appearance_detected=true且occlusion_score不得高于60。"
-        "照明检查局部亮度、高光方向/软硬、阴影和邻近反射；风格检查饱和度、对比、锐度和噪声是否相称，不能用柔化全图掩盖贴图感。"
+        "照明检查局部亮度、高光方向/软硬、阴影和邻近反射；风格检查对比是否相称，不能用柔化全图掩盖贴图感。"
+        "色温、色调、饱和度、像素、清晰度分开打：color_temperature_match、tone_match、saturation_match、pixel_match、sharpness_match，取值 bad|ok|good。"
+        "色温只看白平衡和冷暖，不看色相。色调只看色相和明度，不看饱和度，不看冷暖。"
+        "饱和度必须发灰、发浊、蒙尘、褪色，并且明显低于周围废钢；鲜红、橘红、亮黄、翠绿、纯蓝、荧光，或和废钢一样鲜，saturation_match 为 bad。"
+        "像素只看颗粒、压缩块和局部对比，不看清不清楚。清晰度只看失焦、边缘软硬和拖影；异物比废钢更锐为 bad。不要建议柔化整张图。"
+        "tone_fix 只改色相和明度，不要把饱和度写进 tone_fix。"
         "背景保持需对照原图检查目标区域外结构和文字；身份检查该件的主体和连接，不以生造铭文代替结构。"
         "另给object_present（布尔）、new_appearance_detected（布尔）、pasted_appearance_detected（布尔）、"
         "material_violation（布尔）、weathering_fix、lighting_fix、occlusion_fix、style_fix、background_fix、identity_fix。"

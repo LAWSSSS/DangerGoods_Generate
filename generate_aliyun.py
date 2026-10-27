@@ -1,11 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""
-废钢异物合成图像生成脚本
-中转函数读取 config_bailian.yaml，按模型名选择阿里或火山协议
-路由留空时使用阿里 low：wan2.7-image + qwen3.8-flash
-自动压缩图片到 2K 以内，保持原图比例
-"""
+"""千问系列。生图 wan2.7-image，VLM qwen3.8-flash。算法和提示词只在本文件修改。"""
+
+from __future__ import annotations
 
 import argparse
 import base64
@@ -14,6 +11,7 @@ import math
 import os
 import random
 import re
+import sys
 import time
 import ssl
 from collections import Counter
@@ -28,24 +26,585 @@ import requests
 import yaml
 from PIL import Image, ImageDraw, ImageFilter
 import urllib3
-from object_catalog import (
-    catalog_items as per_item_catalog_items,
-    evaluation_user_prompt as per_item_evaluation_prompt,
-    evaluator_prompt as per_item_evaluator_prompt,
-    load_catalog as load_per_item_catalog,
-    profile_brief as per_item_brief,
-    render_prompt as render_per_item_prompt,
-    size_spec as per_item_size_spec,
+
+THIS_SERIES = "qianwen"
+OTHER_SCRIPT = "generate.py"
+DEFAULT_IMAGE = "wan2.7-image"
+DEFAULT_VLM = "qwen3.8-flash"
+ALLOWED_IMAGES = ("wan2.7-image", "wan2.7-image-pro")
+ALLOWED_VLMS = ("qwen3.8-flash", "qwen3.8-max")
+CHOSEN_IMAGE = DEFAULT_IMAGE
+CHOSEN_VLM = DEFAULT_VLM
+
+
+def series_of_image_model(name: str) -> Optional[str]:
+    if name.startswith("doubao-seedream"):
+        return "doubao"
+    if name.startswith("wan") or name.startswith("qwen"):
+        return "qianwen"
+    return None
+
+
+def series_of_vlm(name: str) -> Optional[str]:
+    if name.startswith("doubao-seed"):
+        return "doubao"
+    if name.startswith("qwen"):
+        return "qianwen"
+    return None
+
+
+def handoff_to_series(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
+    """同一套参数。生图模型决定系列；没写生图模型时才用 VLM 判断。"""
+    image_name = args.model or str(load_app_raw().get("model") or "")
+    series = series_of_image_model(image_name) if image_name else None
+    if series is None:
+        vlm_name = args.vlm_model or str(load_app_raw().get("vlm_model") or "")
+        series = series_of_vlm(vlm_name) if vlm_name else None
+    if series is None:
+        parser.error("无法从生图模型或 VLM 判断是豆包还是千问")
+    if args.model and series_of_image_model(args.model) != series:
+        parser.error("生图模型与所选系列不一致")
+    if series != THIS_SERIES:
+        target = Path(__file__).resolve().parent / OTHER_SCRIPT
+        os.execv(sys.executable, [sys.executable, str(target), *sys.argv[1:]])
+    if args.vlm_model and series_of_vlm(args.vlm_model) != THIS_SERIES:
+        parser.error("VLM 与生图模型不是同一系列")
+    try:
+        image_model, vlm_model = models_for_this_series(args.model or image_name, args.vlm_model)
+    except ValueError as exc:
+        parser.error(str(exc))
+    global CHOSEN_IMAGE, CHOSEN_VLM
+    CHOSEN_IMAGE, CHOSEN_VLM = image_model, vlm_model
+
+
+FUSION_SCORE_AXES = (
+    "weathering_score",
+    "lighting_score",
+    "occlusion_score",
+    "style_score",
+    "background_preservation_score",
+    "identity_score",
 )
-from fusion_quality import (
-    FUSION_SCORE_AXES,
-    appearance_neutral_name,
-    edit_region as fusion_edit_region,
-    geometry_identity,
-    quality_gate as fusion_quality_gate,
-    review_requirements,
-    scene_context_prompt,
+QUALITY_THRESHOLD = 85.0
+
+
+def geometry_identity(profile: dict[str, Any]) -> list[str]:
+    colors = r"青绿色|深绿色|深蓝色|紫粉色|银白色|红色|绿色|蓝色|黑色|银色|白色|灰色|黄色|紫色|红黄|红黑|黑蓝"
+    return [
+        re.sub(colors, "", feature).strip()
+        for feature in profile["identity_features"]
+        if not any(token in feature for token in ("字样", "标签文字", "商标"))
+    ]
+
+
+def appearance_neutral_name(profile: dict[str, Any]) -> str:
+    return re.sub(
+        r"^(?:青绿色|深绿色|深蓝色|紫粉色|红色|绿色|蓝色|黑色|银色|白色|灰色|黄色|紫色|红黄|红黑|黑蓝)\s*",
+        "",
+        profile["name"],
+    )
+
+
+WEATHERING = {
+    "painted_steel": "明确呈现与当前废钢堆相称的报废钢件：可见钢主体主要为深褐锈、灰褐尘土和旧油泥，原漆仅作约10–20%的暗淡碎片残留；此为合成外观目标，不是实测腐蚀面积。裸钢有不规则锈层、点蚀和接缝积锈，大片剥漆，不保留完整红/蓝/绿大色块或亮漆高光。不能只加几个锈点。锈纹沿材质、磕碰和水路分布，不均匀喷成橙色。塑料旋钮/标牌不生铁锈。",
+    "painted_castiron": "报废铸铁件的可见外壳明显氧化、漆膜剥落，深褐锈层与铸造粗糙度相互叠加，凹槽积尘油泥，底脚、孔边及螺栓有锈蚀；原色只留下暗淡残漆。受力面可局部擦亮但不能形成干净的新品反光，禁止仅在角落添几处轻微磨痕。",
+    "stainless_steel": "呈现长期弃置的不锈钢旧件：镜面高光被灰尘、油膜、水垢和不均匀灰褐污层压低，表面有密集细擦伤、暗斑，焊缝/钢制紧固件可有局部锈迹或铁污染。主体仍为不锈钢，不把全部表面变成碳钢红锈；禁止均匀厚红锈。绝不保留干净银白新品和摄影棚灯条反射。塑料手柄只污旧。",
+    "cast_steel": "报废铸钢阀门主体和法兰明显呈深褐/红褐氧化、油泥与积尘，螺栓孔和接缝积锈；银白新金属面改为失去光泽的旧钢材，蓝手轮褪色、剥漆，保留暗淡蓝色身份线索。保留厚法兰、曲面及真实接缝，不套用同一锈贴图，不仅给螺栓点几处轻锈。",
+    "aerosol_can": "报废薄壁气雾罐应明显污旧：印刷褪色磨花、标签残损，表面附着灰褐粉尘和油污，钢制罐在掉漆、划伤、卷边处有清楚的不规则氧化/锈斑。保留弱化的主色与结构线索，禁止亮丽完整广告罐和可读新品印刷。塑料罩盖/喷头只积灰黄化擦伤、不生铁锈，薄壁结构不能被画成厚铸铁。",
+    "fire_extinguisher": "报废灭火器筒体明显褪色、大片擦伤掉漆，裸钢有清楚可辨的褐色锈蚀、接缝流痕和灰尘油泥；红/绿原漆仅保留暗淡旧色块，标签污损模糊，不能保留亮丽洁净的新筒体。金属握把和连接件可锈蚀，橡胶软管只沾灰油并自然弯曲，不生铁锈，不新增喷射烟雾。",
+    "painted_steel_chrome": "报废液压钢缸外壳明显剥漆、锈蚀、油泥和积尘，钢耳环/油口凹处有深褐锈与污垢，原漆暗淡残留。镀铬杆有旧油膜、细擦痕和局部暗斑，只保留弱金属反光，不整根涂成橙锈；禁止干净亮漆缸筒、亮银镜面活塞杆和新品黄标。保持缸筒厚度及机械连接。",
+    "mixed_shock": "报废减震器的钢弹簧和钢端件有明显掉漆、褐锈和油灰，弹簧缝积尘；铝件/镀铬杆有灰暗污膜、氧化擦伤，只有微弱反射。原有彩色残漆降低饱和度；橡胶护套和软管积灰油污、轻微老化但不生铁锈。不能保留崭新的彩色弹簧、亮黑新品外壳；保持圈距和连接。",
+    "air_shock": "废旧空气避震以明显灰褐积尘、油泥、涂层擦伤、铝表面灰白氧化表现旧化，钢耳件和螺栓有锈斑。黑色气室呈灰暗哑光而非新品亮黑；调节钮仅保留暗淡颜色线索，禁止厚铁锈覆盖铝气室，也不增加螺旋弹簧。",
+    "aluminium_steel": "报废气缸铝壳明显灰暗、灰白氧化、密集擦伤并覆盖不均匀油泥积尘；钢拉杆、螺栓、安装端有清楚锈斑。活塞杆有旧油膜和弱反光，禁止干净的银亮铝型材和鲜明新品贴标，禁止把铝壳和杆统一涂成红锈。保持铝/钢/镀铬部件的材质差异。",
+    "plastic_pp": "废弃白色PP罐明显积灰、灰褐油污、黄化和擦伤，盖纹及接缝积污，反射变为旧塑料的暗哑漫反射，不能只点几处轻污后仍像白色新品。没有红褐铁锈，不变成金属罐，不无故烧熔或大面积开裂；污损色与附近废料相称。",
+}
+
+
+APPEARANCE_KEYS = ("color_temperature", "tone", "saturation", "pixel", "sharpness")
+APPEARANCE_MATCHES = (
+    ("color_temperature_match", "色温修正", "describe_color_temperature", "color_temperature"),
+    ("tone_match", "色调修正", "describe_tone", "tone"),
+    ("saturation_match", "饱和度修正", "describe_saturation", "saturation"),
+    ("pixel_match", "像素修正", "describe_pixel", "pixel"),
+    ("sharpness_match", "清晰度修正", "describe_sharpness", "sharpness"),
 )
+
+
+def _observed(value: Any, fallback: str) -> str:
+    text = str(value or "").strip()
+    return text if len(text) >= 2 else fallback
+
+
+def describe_color_temperature(color_temperature: str = "") -> str:
+    """色温只写白平衡和冷暖，不写色相。"""
+    observed = _observed(color_temperature, "与相邻废钢相同的冷暖和白平衡")
+    return (
+        f"观察：{observed}。"
+        "高光、中间调、阴影共用这一套白平衡；"
+        "金属高光不另加暖黄或橙色，阴影不另加青蓝或冷紫；"
+        "异物与废钢交界处冷暖连续，不能出现一圈独立色温，异物本身不能单独偏暖或偏冷。"
+    )
+
+
+def describe_tone(tone: str = "") -> str:
+    """色调只写色相和明度。饱和度是单独一项。"""
+    observed = _observed(tone, "铁锈红、深灰、暗褐，明度不高于周围废钢")
+    return (
+        f"观察：{observed}。"
+        "只看色相和明度，跟相邻废钢，不跳纯色，不加更亮的边。"
+        "不要在这句里写饱和度，也不要写冷暖。"
+    )
+
+
+def describe_saturation(saturation: str = "") -> str:
+    """饱和度必须发灰，并且明显低于相邻废钢。"""
+    observed = _observed(saturation, "发灰、蒙尘、褪色，明显低于周围废钢")
+    return (
+        f"观察：{observed}。"
+        "饱和度必须再压低一档，明显低于相邻废钢，看起来发灰、发浊、蒙尘、褪色；"
+        "宁可几乎看不出原来的颜色，也不要鲜艳；"
+        "禁止鲜红、橘红、亮黄、翠绿、纯蓝、荧光色和高饱和色块；"
+        "商品原色只留一点色相，其余混进灰尘和铁锈灰。"
+    )
+
+
+def describe_pixel(pixel: str = "") -> str:
+    """像素只写颗粒、压缩和局部对比，不写清不清楚。"""
+    observed = _observed(pixel, "颗粒粗、压缩块明显、局部对比低")
+    return (
+        f"观察：{observed}。"
+        "异物的像素细节必须低于监控原图：采样更粗，颗粒更大，压缩块更明显，局部对比更低；"
+        "细线、锈点和刻字不能比相邻废钢分得更开；"
+        "和原图像素相同仍然偏高，要再粗一档。"
+        "禁止高清贴图、干净边缘和无噪点表面。"
+    )
+
+
+def describe_sharpness(sharpness: str = "") -> str:
+    """清晰度只写失焦和拖影。不把整张监控图再柔化。"""
+    observed = _observed(sharpness, "没有拖影时保持轻微失焦和发软边缘")
+    return (
+        f"观察：{observed}。"
+        "如果废钢边缘沿同一方向被拉糊，那是拍摄时相机晃动，异物必须带同样方向、同样长度的运动模糊；"
+        "没有拖影时，也要保持同样的失焦和发软边缘。"
+        "异物不能更锐，不能在发糊的画面里突然清晰。"
+        "只改异物，不要把整张监控图再柔化、降分辨率或二次渲染发糊。"
+    )
+
+
+def appearance_from_context(context: dict[str, Any] | None) -> dict[str, str]:
+    source = context or {}
+    return {key: str(source.get(key) or "").strip() for key in APPEARANCE_KEYS}
+
+
+def appearance_prompt_block(appearance: dict[str, str] | None = None) -> str:
+    observed = appearance or {}
+    return "\n".join([
+        f"【色温】{describe_color_temperature(observed.get('color_temperature', ''))}",
+        f"【色调】{describe_tone(observed.get('tone', ''))}",
+        f"【饱和度】{describe_saturation(observed.get('saturation', ''))}",
+        f"【像素】{describe_pixel(observed.get('pixel', ''))}",
+        f"【清晰度】{describe_sharpness(observed.get('sharpness', ''))}",
+    ])
+
+
+def normalize_appearance_match(value: Any) -> str:
+    text = str(value or "").strip().lower()
+    if text in {"bad", "poor", "差", "不匹配", "不一致", "失败"}:
+        return "bad"
+    if text in {"good", "很好", "匹配", "一致"}:
+        return "good"
+    return "ok"
+
+
+def appearance_is_bad(evaluation: dict[str, Any]) -> bool:
+    return any(
+        normalize_appearance_match(evaluation.get(match_key)) == "bad"
+        for match_key, _label, _method, _obs in APPEARANCE_MATCHES
+    )
+
+
+def appearance_correction_text(
+    evaluation: dict[str, Any], appearance: dict[str, str] | None
+) -> str:
+    """只把判为 bad 的那一项写成对应的生图要求，不改写禁令用词。"""
+    observed = appearance or {}
+    writers = {
+        "describe_color_temperature": describe_color_temperature,
+        "describe_tone": describe_tone,
+        "describe_saturation": describe_saturation,
+        "describe_pixel": describe_pixel,
+        "describe_sharpness": describe_sharpness,
+    }
+    parts: list[str] = []
+    for match_key, label, method, obs_key in APPEARANCE_MATCHES:
+        if normalize_appearance_match(evaluation.get(match_key)) != "bad":
+            continue
+        parts.append(f"【{label}】{writers[method](observed.get(obs_key, ''))}")
+    if not parts:
+        return ""
+    return (
+        "\n".join(parts)
+        + "\n把每一项修正写成对应的画面要求：色温不写色相，色调不写冷暖也不写饱和度，"
+        "饱和度必须发灰且明显低于废钢，像素不写清不清楚，清晰度不写噪点。"
+        "不要要求柔化整张图，也不要替换禁止鲜红、青蓝、橙色这类原词。"
+    )
+
+
+def scene_context_prompt(context: dict[str, Any] | None) -> str:
+    labels = {
+        "lighting": "当前光照与方向",
+        "contrast": "当前明暗和反射强度",
+        "capture_style": "当前成像风格与噪声",
+        "surface_condition": "附近废料的旧化状态",
+        "support_and_occlusion": "支撑面和前景遮挡",
+    }
+    context = context or {}
+    parts = [
+        f"{label}：{str(context[key])[:260]}"
+        for key, label in labels.items()
+        if isinstance(context.get(key), str) and context[key].strip()
+    ]
+    if not parts:
+        return "【背景适配】直接观察本张原监控图，按目标附近钢件的明暗、色温、旧化、反射、噪声和锐度重画物品；无法确定光源时不要添加摄影棚高光或新投影方向。"
+    return "【背景适配，来源为VLM观察而非物理测量】" + "；".join(parts)
+
+
+def review_requirements() -> str:
+    return (
+        "分别给weathering_score、lighting_score、occlusion_score、style_score、"
+        "background_preservation_score、identity_score（0–100）。"
+        "旧化检查可见材质是否明确报废且与附近废料相称；铁/碳钢须有清楚可辨的锈蚀，"
+        "塑料、铝、不锈钢主要检查积污、氧化、擦伤和弱反射，不能要求全部铁锈。"
+        "若仍是新漆、亮银干净新品、摄影棚高光或只有装饰性几个锈点，new_appearance_detected=true且weathering_score不得高于60。"
+        "检查物品是否有真实承重支点、至少部分轮廓被原有前景钢件截断、贴合接触阴影；"
+        "完整展品摆在堆顶、悬浮、边缘光晕、轮廓全露或独立黑描边判pasted_appearance_detected=true且occlusion_score不得高于60。"
+        "照明检查局部亮度、高光方向/软硬、阴影和邻近反射；风格检查对比是否相称，不能用柔化全图掩盖贴图感。"
+        "色温、色调、饱和度、像素、清晰度分开打：color_temperature_match、tone_match、saturation_match、pixel_match、sharpness_match，取值 bad|ok|good。"
+        "色温只看白平衡和冷暖，不看色相。色调只看色相和明度，不看饱和度，不看冷暖。"
+        "饱和度必须发灰、发浊、蒙尘、褪色，并且明显低于周围废钢；鲜红、橘红、亮黄、翠绿、纯蓝、荧光，或和废钢一样鲜，saturation_match 为 bad。"
+        "像素只看颗粒、压缩块和局部对比，不看清不清楚。清晰度只看失焦、边缘软硬和拖影；异物比废钢更锐为 bad。不要建议柔化整张图。"
+        "tone_fix 只改色相和明度，不要把饱和度写进 tone_fix。"
+        "背景保持需对照原图检查目标区域外结构和文字；身份检查该件的主体和连接，不以生造铭文代替结构。"
+        "另给object_present（布尔）、new_appearance_detected（布尔）、pasted_appearance_detected（布尔）、"
+        "material_violation（布尔）、weathering_fix、lighting_fix、occlusion_fix、style_fix、background_fix、identity_fix。"
+        "全部六项必须高于85、存在目标且三个缺陷标志均为false才达到模型复核标准。"
+        "分数必须根据看见的图像给出，不能因提示词写了要求就给高分；模型复核通过仍需人工看图。"
+    )
+
+
+def quality_gate(evaluation: dict[str, Any]) -> dict[str, Any]:
+    scores: dict[str, float] = {}
+    reasons = []
+    for key in FUSION_SCORE_AXES:
+        try:
+            score = float(evaluation.get(key, 0))
+            if not math.isfinite(score):
+                score = 0.0
+        except (TypeError, ValueError):
+            score = 0.0
+        score = min(100.0, max(0.0, score))
+        scores[key] = score
+        if score <= QUALITY_THRESHOLD:
+            reasons.append(f"{key}_not_above_85")
+    if evaluation.get("object_present") is not True:
+        reasons.append("object_presence_not_confirmed")
+    for key in (
+        "new_appearance_detected",
+        "pasted_appearance_detected",
+        "material_violation",
+    ):
+        if evaluation.get(key) is not False:
+            reasons.append(key)
+    return {
+        "passed": not reasons,
+        "scores": scores,
+        "minimum_score": min(scores.values()),
+        "reasons": reasons,
+        "evidence_type": "vlm_visual_opinion_not_human_acceptance",
+    }
+
+
+def edit_region(
+    xy: list[float], ratio: float, image_size: tuple[int, int], cross_ratio: float
+) -> list[float]:
+    """Return a normalized interactive edit hint, including support and shadow context."""
+    width, height = image_size
+    box_w = min(0.72, max(0.14, ratio * 1.55 + 0.03))
+    box_h = min(
+        0.60, max(0.16, ratio * (0.60 + min(1.0, cross_ratio)) * width / height)
+    )
+    cx = min(0.96 - box_w / 2, max(0.04 + box_w / 2, float(xy[0])))
+    cy = min(0.84 - box_h / 2, max(0.10 + box_h / 2, float(xy[1])))
+    return [
+        round(cx - box_w / 2, 5),
+        round(cy - box_h / 2, 5),
+        round(cx + box_w / 2, 5),
+        round(cy + box_h / 2, 5),
+    ]
+
+
+def region_prompt(region: list[float] | None) -> str:
+    if not region:
+        return ""
+    x1, y1, x2, y2 = region
+    return (
+        f"【局部重建区域】归一化坐标x={x1:.3f}–{x2:.3f}、y={y1:.3f}–{y2:.3f}，"
+        f"目标位于区域中心附近（{(x1 + x2) / 2:.1%}，{(y1 + y2) / 2:.1%}）。"
+        "此框包含物品、接触阴影和少量已有前景钢件，不是物品的外接框；物品可见长度仍按本轮设定比例。"
+        "允许在框内重建接触处和遮挡边缘，使原有钢条/钢板自然盖住物品部分轮廓；保持框外场景、时间戳和机位字样。"
+    )
+
+def load_catalog(
+    path: str | Path, reference_root: str | Path | None = None
+) -> dict[str, Any]:
+    data = json.loads(Path(path).read_text(encoding="utf-8"))
+    if data.get("schema_version") != "1.0" or not isinstance(data.get("objects"), list):
+        raise ValueError("物品目录格式不符合 1.0 约定")
+    root = Path(reference_root or data["reference_root"]).expanduser().resolve()
+    ids, names = set(), set()
+    for profile in data["objects"]:
+        identifier = profile["id"]
+        filename = profile["reference_filename"]
+        if identifier in ids or filename in names:
+            raise ValueError("物品 ID 和参考图文件名必须唯一")
+        ids.add(identifier)
+        names.add(filename)
+        reference = (root / filename).resolve()
+        if not reference.is_relative_to(root) or not reference.is_file():
+            raise ValueError(f"找不到目录中的参考图：{filename}")
+        policy = profile["size_policy"]
+        if policy["reference_length_mm"] <= 0 or policy["cross_mm"] <= 0:
+            raise ValueError(f"{identifier} 的尺寸必须为正")
+        low, high = policy["visible_ratio_range"]
+        if not 0 < low <= high < 1:
+            raise ValueError(f"{identifier} 的可见比例范围无效")
+    data["reference_root"] = str(root)
+    return data
+
+
+def catalog_items(catalog: dict[str, Any]) -> list[dict[str, Any]]:
+    return [
+        {
+            "path": Path(catalog["reference_root"]) / profile["reference_filename"],
+            "class": profile["category"],
+            "weight": profile.get("sampling_weight", 1.0),
+            "filename": profile["reference_filename"],
+            "profile_id": profile["id"],
+            "profile": profile,
+        }
+        for profile in catalog["objects"]
+    ]
+
+
+def select_profile(catalog: dict[str, Any], identifier: str) -> dict[str, Any]:
+    for profile in catalog["objects"]:
+        if identifier in (
+            profile["id"],
+            profile["reference_filename"],
+            profile.get("original_filename"),
+        ):
+            return profile
+    raise ValueError(f"目录中没有该物品：{identifier}")
+
+
+def profile_brief(profile: dict[str, Any]) -> dict[str, Any]:
+    policy = profile["size_policy"]
+    return {
+        "height_cm": policy["reference_length_mm"] / 10,
+        "diameter_cm": policy["cross_mm"] / 10,
+        "cross_name": policy["cross_name"],
+        "expose": profile["exposure_hint"],
+        "forbid": "；".join(profile["forbidden_changes"]),
+        "parts": [
+            {"name": name, "cm": value / 10}
+            for name, value in profile["parts_mm"].items()
+        ],
+        "evidence_status": profile["dimension_evidence"]["status"],
+        "physical_name": profile["name"],
+        "profile_id": profile["id"],
+    }
+
+
+def size_spec(
+    profile: dict[str, Any], target_ratio: float | None = None
+) -> dict[str, Any]:
+    policy, brief = profile["size_policy"], profile_brief(profile)
+    low, high = policy["visible_ratio_range"]
+    ratio = (
+        (low + high) / 2 if target_ratio is None else min(high, max(low, target_ratio))
+    )
+    span_cm = policy["assumed_scene_width_mm"] / 10
+    length, cross = brief["height_cm"], brief["diameter_cm"]
+    dims = "，".join(
+        f"{name} {value:g} mm" for name, value in profile["dimensions_mm"].items()
+    )
+    parts = "，".join(
+        f"{name} {value:g} mm" for name, value in profile["parts_mm"].items()
+    )
+    text = (
+        f"【本轮设定尺寸】{profile['name']}（{profile['id']}）。合成工作尺寸：{dims}。"
+        f"结构细节：{parts}。尺寸证据状态：{profile['dimension_evidence']['status']}；"
+        "工作值不是对此实例的实测值。"
+        f"本轮主体可见最长边目标约占画面宽度 {ratio:.2%}，允许 {low:.2%}–{high:.2%}。"
+        f"此范围以背景水平有效宽度暂按 {span_cm:g} cm、局部投影范围的假设推导；背景尚未标定。"
+        "遮挡使可见区域变短，不得据此缩小完整主体或更改结构比例。"
+        f"{profile['exposure_hint']}。"
+    )
+    return {
+        "object_class": profile["category"],
+        "profile_id": profile["id"],
+        "physical_name": profile["name"],
+        "target_ratio": ratio,
+        "target_cm": ratio * span_cm,
+        "diameter_cm": cross,
+        "diameter_to_height": cross / length,
+        "cross_name": brief["cross_name"],
+        "scale_min": low,
+        "scale_max": high,
+        "size_brief": text,
+        "real_height_cm": length,
+        "real_diameter_cm": cross,
+        "parts": brief["parts"],
+        "expose": brief["expose"],
+        "forbid": brief["forbid"],
+        "dimension_evidence": profile["dimension_evidence"],
+        "cm_fields_semantics": "configured_working_dimensions_not_instance_measurements",
+        "background_calibration": "assumed_not_measured",
+        "assumed_scene_width_cm": span_cm,
+    }
+
+
+def render_prompt(
+    profile: dict[str, Any],
+    target_ratio: float | None = None,
+    position_hint: str | None = None,
+    orientation_hint: str | None = None,
+    feedback: str = "",
+    scene_context: dict[str, Any] | None = None,
+    edit_region_xyxy: list[float] | None = None,
+    reference_kind: str = "six_view_atlas",
+) -> str:
+    # Avoid recursively nesting old full prompts when the optimizer returns prior constraints.
+    fixed_prefixes = (
+        "只新增一件",
+        "第1张图是",
+        "【本轮设定尺寸】",
+        "身份和几何必须保留：",
+        "材质和旧化：",
+        "姿态和支撑：",
+        "遮挡：",
+        "匹配原场景的",
+        "只在原监控图内",
+        "禁止：",
+        "当前指定位置：",
+        "当前朝向建议：",
+        "【最高优先级",
+        "【背景适配",
+        "【局部重建区域】",
+        "【接触与遮挡】",
+        "【外观不合格条件】",
+    )
+    feedback_lines = []
+    for line in feedback.splitlines():
+        line = line.strip()
+        if line.startswith(fixed_prefixes):
+            continue
+        if line.startswith("本轮局部修正建议（服从上述身份、材质和尺寸设定）："):
+            line = line.split("：", 1)[1]
+        if line and line not in feedback_lines:
+            feedback_lines.append(line)
+    feedback = "\n".join(feedback_lines)
+    lines = [
+        "【最高优先级：背景中的报废旧件】输出当前监控场景中长期弃置的这一件物品。几何身份参考当前物品参考图，旧化、光照、色调和成像外观以第1张场景为准。必须重新生成已明显旧化的材质，不能保留新品漆面、干净金属面、摄影棚高光、鲜艳标签或展品摆放状态。名称中的原始颜色只帮助辨认，不得据此恢复饱和新品颜色。",
+        (
+            f"只新增一件 {appearance_neutral_name(profile)}，后图是用户提供的生锈六视图，同一件物品的六个角度不是六个实例。保留既有锈蚀和剥漆特征，按原场景重新匹配光线、色调、锐度和噪声；禁止恢复新品外观。"
+            if reference_kind == "weathered_six_view_atlas"
+            else f"只新增一件 {appearance_neutral_name(profile)}，后图为已重新生成的废旧状态身份参考；几何来自该件六视图，完整参考不是最终场景中的完整展示要求。"
+            if reference_kind == "weathered_single_view"
+            else f"只新增一件 {profile['name']}，使用当前选定六视图辨认同一物品；六个格子不是六个实例。"
+        ),
+        "第1张图是原始监控场景，后面的图只作身份/结构参考。",
+        scene_context_prompt(scene_context),
+        appearance_prompt_block(appearance_from_context(scene_context)),
+        size_spec(profile, target_ratio)["size_brief"],
+        "身份和几何必须保留：" + "；".join(geometry_identity(profile)) + "。",
+        "材质和旧化：" + profile["weathering_prompt"],
+        "姿态和支撑：" + profile["pose_hint"] + "；" + profile["support_hint"] + "。",
+        "遮挡：" + profile["exposure_hint"] + "。",
+        "【接触与遮挡】先选真实钢板/型钢支点，把主体大部分置于废钢缝隙深处；至少一块原有宽钢板/型钢遮住主体中段并截断两侧外轮廓，不以一条细杆轻轻跨过表面代替真正埋入。露出一段可识别旧材质及安装端之一，保持完整几何尺度。接触阴影只在真实支点附近贴合产生，不能完整摆在堆顶或出现整圈描边。允许小幅重建接触处和前景遮挡边缘。",
+        "接触阴影贴合真实支点，投影服从原场景光源。上面五项分开执行：色温只对齐白平衡，色调只对齐色相和明度，饱和度必须低于废钢，像素只对齐颗粒和压缩，清晰度只对齐失焦和拖影。",
+        "只在原监控图内重新生成物品，不抠图/贴图/复制摄影棚底色或宫格线；保持时间戳、机位文字、料斗边框、相机视角和非目标废料结构。",
+        "禁止："
+        + "；".join(profile["forbidden_changes"])
+        + "；悬浮、穿模、重复实例、额外无关部件、整图柔化、错误光照。",
+        "【外观不合格条件】钢铁表面仍像新品、只有零星装饰锈点、残漆过亮、孤立摄影棚高光、独立色温、过锐边缘、白边光晕、完整展品轮廓无前景遮挡，均不符合要求。标签只留污旧色块，不要求清晰可读。",
+    ]
+    if position_hint and not edit_region_xyxy:
+        lines.append(
+            "当前指定位置："
+            + position_hint
+            + "；选择可承重的接触面并避开时间戳/机位字样。"
+        )
+    if orientation_hint:
+        lines.append(
+            "当前朝向建议："
+            + orientation_hint
+            + "；若与该物品支撑条件冲突，优先保持可稳定支撑的姿态。"
+        )
+    if feedback.strip():
+        lines.append(
+            "本轮局部修正建议（服从上述身份、材质和尺寸设定）：" + feedback[:1200]
+        )
+    if edit_region_xyxy:
+        lines.append(region_prompt(edit_region_xyxy))
+    return "\n".join(lines)
+
+
+def evaluator_prompt(profile: dict[str, Any]) -> str:
+    return (
+        f"你评估的对象是 {profile['name']}（{profile['id']}），而非该大类的其他型号。"
+        "只输出有效JSON。visible_ratio是主体可见最长边/画面宽度，可以依据图像估计；"
+        "背景尚未标定，换算厘米仅是有条件的估计，不得宣称从单图测得真实长度。"
+        "按该物品的工作尺寸、相对结构比例、姿态、投影和遮挡检查。"
+        "不要求可见片段长于完整横截面；被前景遮住的圆弧/边缘可以更小，但不能把整个对象缩成玩具。"
+        "同大类不同尺寸不得混用，材料保持自身物理外观。模型意见不等于人工验收。"
+        "禁止建议柔化整图；sharpness与尺寸判断分开。"
+        "返回visible_ratio、size_judgment（too_large|acceptable|too_small）、"
+        "tone_score、size_score、overall_score（0到100）、tone_fix、size_fix、overall_fix、"
+        "color_temperature_match、tone_match、saturation_match、pixel_match、sharpness_match（bad|ok|good）、"
+        "sharpness（sharp|ok|soft）、confidence（0到1）、reason、improvement_suggestion、"
+        "quality_score（0到1）、fusion_quality（very bad|bad|ok|good|very good）。"
+        "不确定时降低confidence并在reason说明，不把假设写成测量。"
+        + review_requirements()
+    )
+
+
+def evaluation_user_prompt(
+    profile: dict[str, Any], spec: dict[str, Any], history: str
+) -> str:
+    return (
+        f"只评估当前 {profile['name']}（{profile['id']}）的生成图。\n"
+        + spec["size_brief"]
+        + "\n"
+        + f"当前目标主体可见最长边/画面宽度={spec['target_ratio']:.2%}，"
+        + f"允许{spec['scale_min']:.2%}–{spec['scale_max']:.2%}。\n"
+        + "轮次历史只用于理解调整过程，当前判断以本轮设定和当前输出为准。\n"
+        + history
+        + "\n"
+        + evaluator_prompt(profile)
+    )
+
+
+per_item_catalog_items = catalog_items
+per_item_evaluation_prompt = evaluation_user_prompt
+per_item_evaluator_prompt = evaluator_prompt
+load_per_item_catalog = load_catalog
+per_item_brief = profile_brief
+render_per_item_prompt = render_prompt
+per_item_size_spec = size_spec
+fusion_quality_gate = quality_gate
+fusion_edit_region = edit_region
 
 # ============ 强制禁用SSL验证 ============
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -271,11 +830,21 @@ class AppConfig:
         "小件如果画得达到更大类别的真实尺寸，判定为太大。\n"
         "文字只要求模糊异物标签；禁止建议柔化整张图或降低分辨率。\n"
         "sharpness 只记整图是否发糊（sharp|ok|soft），不要靠缩小异物来修清晰度。\n"
+        "另评五项外观，每项只评自己的内容，取值 bad|ok|good："
+        "color_temperature_match 只看白平衡和冷暖；"
+        "tone_match 只看色相和明度，不看饱和度；"
+        "saturation_match 必须发灰且明显低于废钢，鲜红、橘红、亮黄、翠绿、纯蓝、荧光或与废钢同样鲜艳为 bad；"
+        "pixel_match 只看颗粒、压缩块和局部对比；"
+        "sharpness_match 只看失焦、拖影和边缘软硬，异物更锐为 bad。\n"
+        "tone_fix 只改色相和明度，不要把饱和度写进 tone_fix。\n"
         "另给三项 0 到 100 的整数分：tone_score 色调，size_score 大小，overall_score 整体效果。\n"
         "三项都高于 85 才算这轮合格。每项给一句修正：tone_fix、size_fix、overall_fix。\n"
         "输出JSON：{\"visible_ratio\": 0.0, \"size_judgment\": \"too_large|acceptable|too_small\", "
         "\"tone_score\": 0, \"size_score\": 0, \"overall_score\": 0, "
         "\"tone_fix\": \"\", \"size_fix\": \"\", \"overall_fix\": \"\", "
+        "\"color_temperature_match\": \"bad|ok|good\", \"tone_match\": \"bad|ok|good\", "
+        "\"saturation_match\": \"bad|ok|good\", \"pixel_match\": \"bad|ok|good\", "
+        "\"sharpness_match\": \"bad|ok|good\", "
         "\"sharpness\": \"sharp|ok|soft\", \"confidence\": 0.0, \"reason\": \"\", "
         "\"improvement_suggestion\": \"\", \"quality_score\": 0.0, "
         "\"fusion_quality\": \"very bad|bad|ok|good|very good\"}"
@@ -1579,8 +2148,14 @@ class VLMAnalyzer:
             "给出废钢堆几何中心，以及从该中心展开、落在废钢外边缘（不是墙壁）的四个角落。"
             "四个点尽量构成以几何中心为对角线中点的四边形，并尽量盖住整堆废钢。"
             "坐标为归一化比例，x=0左缘，x=1右缘，y=0上缘，y=1下缘。不要使用像素值。\n"
-            "3. scene_context：观察本张真实背景的lighting光源/阴影/高光、tone局部色温和饱和度、contrast明暗和反射、"
+            "3. scene_context：观察本张真实背景的lighting光源/阴影/高光、contrast明暗和反射、"
             "capture_style监控锐度/噪声、surface_condition邻近钢件旧化程度、support_and_occlusion可承重钢件与可遮挡边缘。"
+            "再把外观拆成五项，禁止混进同一句："
+            "color_temperature 只写白平衡和冷暖，不写色相；"
+            "tone 只写主色相、辅色相和明度，不写饱和度，不写冷暖；"
+            "saturation 必须写成发灰、发浊、蒙尘、褪色，并且明显低于周围废钢；"
+            "pixel 只写颗粒、压缩块和局部对比，不写清不清楚；"
+            "sharpness 先写有没有拍摄晃动的拖影，再写失焦和边缘软硬，不写噪点。"
             "不确定光源方向时明确写不确定，不伪造物理测量。\n"
             "4. placement_xy：选一个能落在钢板/型钢支点上且能被现有前景钢件遮住部分轮廓的堆内位置，"
             "避开墙壁、时间戳、机位文字和完整展示式堆顶摆放，给归一化[x,y]。\n"
@@ -1590,8 +2165,9 @@ class VLMAnalyzer:
             "\"corners\":["
             "{\"x\":0.0,\"y\":0.0},{\"x\":0.0,\"y\":0.0},"
             "{\"x\":0.0,\"y\":0.0},{\"x\":0.0,\"y\":0.0}],"
-            "\"placement_xy\":[0.5,0.5],\"scene_context\":{\"lighting\":\"观察\",\"tone\":\"观察\","
-            "\"contrast\":\"观察\",\"capture_style\":\"观察\",\"surface_condition\":\"观察\",\"support_and_occlusion\":\"观察\"}}"
+            "\"placement_xy\":[0.5,0.5],\"scene_context\":{\"lighting\":\"观察\","
+            "\"contrast\":\"观察\",\"capture_style\":\"观察\",\"surface_condition\":\"观察\",\"support_and_occlusion\":\"观察\","
+            "\"color_temperature\":\"色温\",\"tone\":\"色调\",\"saturation\":\"饱和度\",\"pixel\":\"像素\",\"sharpness\":\"清晰度\"}}"
         )
         return self._call_vlm(
             system_prompt=(
@@ -1628,7 +2204,12 @@ class VLMAnalyzer:
             "请写一条交给生图模型的中文 generation_prompt。\n"
             "生图模型只能看到这条提示词，看不到尺寸历程。\n"
             "生图模型除背景画布外还会看到该件六视图，参考图只认几何和零件，不继承新品光泽、鲜艳漆面、摄影棚光照或干净标签。"
-            "必须写成明确报废旧件，按原场景的光线、色调和成像风格重建材质，并交代实际支点、贴合接触阴影、前景钢件穿过部分轮廓的遮挡关系。\n"
+            "必须写成明确报废旧件，按原场景重建材质，并交代实际支点、贴合接触阴影、前景钢件穿过部分轮廓的遮挡关系。\n"
+            "背景外观必须分成五句，禁止混成一句颜色或一句清晰度："
+            "色温只写白平衡和冷暖；色调只写色相和明度，不要写饱和度；"
+            "饱和度必须发灰、发浊、蒙尘、褪色，并且明显低于周围废钢，禁止鲜红、橘红、亮黄、翠绿、纯蓝、荧光色；"
+            "像素只写颗粒、压缩块和局部对比；清晰度只写失焦和拖影，异物不能比废钢更锐，不要柔化整张监控图。\n"
+            "这些禁令里的颜色词保持原样，不要改写成别的说法。\n"
             "结构尺寸必须使用【本轮设定尺寸】里的真实厘米和直径/高度，不要把筒径、握把、杆径缩成几厘米的模型。\n"
             "本轮可见最长边的厘米和百分比也不要改。\n"
             "不要写上一轮、测得、历程、返回尺寸、得分，也不要写更早轮次的百分比。\n"
@@ -1701,6 +2282,11 @@ class VLMAnalyzer:
             "6. 小件如果达到更大类别的真实尺寸，例如喷雾罐画得像灭火器 → too_large。\n"
             "7. 标签文字可建议模糊标签；禁止建议柔化整张图或降低分辨率。\n"
             "8. sharpness 评估整张图是否发糊；发糊不要改 size_judgment。\n"
+            "12. color_temperature_match 只看白平衡和冷暖。\n"
+            "13. tone_match 只看色相和明度，不看饱和度；tone_fix 也不写饱和度。\n"
+            "14. saturation_match：发灰、褪色且明显低于废钢为 good；鲜红、橘红、亮黄、翠绿、纯蓝、荧光，或和废钢一样鲜，为 bad。\n"
+            "15. pixel_match 只看颗粒、压缩块和局部对比。\n"
+            "16. sharpness_match 只看失焦、拖影和边缘软硬；异物比废钢更锐为 bad。\n"
             "9. quality_score 只打融合和清晰，不要因尺寸不合格就打到 0.3。\n"
             "10. tone_score、size_score、overall_score 为 0 到 100 的整数。三项都高于 85 才算合格。\n"
             "11. tone_fix、size_fix、overall_fix 各用一句话说明下一轮该怎么改色调、大小和整体埋入效果。\n"
@@ -1708,6 +2294,9 @@ class VLMAnalyzer:
             "{\"visible_ratio\": 0.0, \"size_judgment\": \"too_large|acceptable|too_small\", "
             "\"tone_score\": 0, \"size_score\": 0, \"overall_score\": 0, "
             "\"tone_fix\": \"\", \"size_fix\": \"\", \"overall_fix\": \"\", "
+            "\"color_temperature_match\": \"bad|ok|good\", \"tone_match\": \"bad|ok|good\", "
+            "\"saturation_match\": \"bad|ok|good\", \"pixel_match\": \"bad|ok|good\", "
+            "\"sharpness_match\": \"bad|ok|good\", "
             "\"sharpness\": \"sharp|ok|soft\", \"confidence\": 0.0, \"reason\": \"\", "
             "\"improvement_suggestion\": \"\", \"quality_score\": 0.0, "
             "\"fusion_quality\": \"very bad|bad|ok|good|very good\"}"
@@ -1889,6 +2478,11 @@ class VLMAnalyzer:
         geometry = geometry_from_vlm_reply(opening)
         scene_context = opening.get("scene_context")
         self.cfg.active_scene_context = scene_context if isinstance(scene_context, dict) else None
+        observed = appearance_from_context(self.cfg.active_scene_context)
+        print(
+            "  [VLM] 背景外观: "
+            + ", ".join(f"{key}={observed[key] or '未观察'}" for key in observed)
+        )
         self.optimization_history.append({"stage": "opening", "data": opening})
 
         position_sample = sample_foreign_object_position(geometry)
@@ -1975,7 +2569,8 @@ class VLMAnalyzer:
             vlm_sharpness = evaluation.get("sharpness", "ok")
             scores = score_triplet(evaluation)
             mean_score = average_score(evaluation)
-            passed = scores_pass(evaluation)
+            appearance_bad = appearance_is_bad(evaluation)
+            passed = scores_pass(evaluation) and not appearance_bad
             gate = fusion_quality_gate(evaluation) if self.cfg.active_object_profile else None
             if gate is not None:
                 passed = passed and gate["passed"] and size_judgment == "acceptable"
@@ -1997,6 +2592,11 @@ class VLMAnalyzer:
                 "tone_score": scores["tone_score"],
                 "size_score": scores["size_score"],
                 "overall_score": scores["overall_score"],
+                "color_temperature_match": evaluation.get("color_temperature_match"),
+                "tone_match": evaluation.get("tone_match"),
+                "saturation_match": evaluation.get("saturation_match"),
+                "pixel_match": evaluation.get("pixel_match"),
+                "sharpness_match": evaluation.get("sharpness_match"),
                 "average_score": mean_score,
                 "passed": passed,
                 "fusion_gate": gate,
@@ -2065,8 +2665,15 @@ class VLMAnalyzer:
             print(
                 f"  [VLM] 评估结果: size={size_judgment}, visible={visible_txt}, "
                 f"色调={scores['tone_score']:.0f}, 大小={scores['size_score']:.0f}, "
-                f"整体={scores['overall_score']:.0f}, 平均={mean_score:.1f}"
+                f"整体={scores['overall_score']:.0f}, 平均={mean_score:.1f}, "
+                f"色温={evaluation.get('color_temperature_match')}, "
+                f"色相={evaluation.get('tone_match')}, "
+                f"饱和度={evaluation.get('saturation_match')}, "
+                f"像素={evaluation.get('pixel_match')}, "
+                f"清晰={evaluation.get('sharpness_match')}"
             )
+            if scores_pass(evaluation) and appearance_bad:
+                print("  [VLM] 分数已过线，但色温、色调、饱和度、像素或清晰度仍不一致，继续改提示词")
             
             if passed:
                 print(f"  [VLM] ✅ 尺寸与场景融合复核通过，采用第{round_num}轮；仍需人工看图")
@@ -2099,7 +2706,9 @@ class VLMAnalyzer:
                 f"风格修正：{evaluation.get('style_fix', '')}\n"
                 f"背景修正：{evaluation.get('background_fix', '')}\n"
                 f"身份修正：{evaluation.get('identity_fix', '')}\n"
-                "写给生图模型的提示词不要出现分数，也不要写上一轮，只把这三项修正写成这一轮的画面要求。"
+                f"{appearance_correction_text(evaluation, appearance_from_context(self.cfg.active_scene_context))}\n"
+                "写给生图模型的提示词不要出现分数，也不要写上一轮。"
+                "色温、色调、饱和度、像素、清晰度分开写，不要把饱和度写进色调，也不要改写禁止鲜红、青蓝、橙色这类原词。"
             )
             size_state["ratio"] = next_ratio
             next_spec = round_size_spec(self.cfg, object_class, next_ratio)
@@ -2382,7 +2991,9 @@ def load_negative_prompt(path: Path) -> str:
         "禁止对异物进行任何形式的变形、拉伸、扭曲或比例改变。"
         "不要生成看起来像是人工放置的物体，应该看起来像是自然存在于废钢堆中。"
         "不要放在很显眼的地方，不要让异物成为画面的视觉焦点，必须与背景完美融合。"
-        "不要柔化整张图，不要降低清晰度，不要二次渲染导致发糊，保持与监控原图相同的锐利度。"
+        "不要柔化整张图，不要降低整张图的分辨率，不要二次渲染导致发糊。"
+        "饱和度必须发灰、发浊、褪色，并且明显低于周围废钢。禁止鲜红、橘红、亮黄、翠绿、纯蓝、荧光色。"
+        "异物不能比废钢更锐，也不能比监控原图的颗粒更细。"
     )
     ensure_file(path, DEFAULT_NEGATIVE_PROMPT)
     return path.read_text(encoding="utf-8").strip()
@@ -2437,7 +3048,6 @@ def build_prompt(
     
     enhancer = PromptEnhancer()
     weathering = random.choice(enhancer.get_weathering_descriptions(object_class))
-    tone_desc = random.choice(enhancer.get_tone_descriptions(""))
     scenario = random.choice(enhancer.get_scenario_descriptions())
     
     fusion_enhance = (
@@ -2454,7 +3064,8 @@ def build_prompt(
         "8. 异物的边缘必须被废钢遮挡，有明显的遮挡和交错，大部分被挡住，但仍须露出能辨认的一小段\n"
         "9. 异物表面的锈迹、油污、灰尘纹理必须与周围废钢完全一致\n"
         "\n【色彩与光影融合】\n"
-        "10. 异物的颜色必须与周围废钢融合，不能有颜色跳跃\n"
+        "10. 下面五项分开写，禁止混成一句颜色或一句清晰度：\n"
+        f"{appearance_prompt_block(appearance_from_context(getattr(cfg, 'active_scene_context', None)))}\n"
         "11. 异物的光影必须与背景图片的光照方向完全一致\n"
         "12. 异物的材质感必须与废钢一致，不能是亮面或光滑的\n"
         "\n【风格与质感】\n"
@@ -2463,11 +3074,11 @@ def build_prompt(
         f"15. {weathering}\n"
         f"16. 整体场景：{scenario}\n"
         "17. 废钢场景、时间戳和摄像头文字保持原样，但必须在指定位置新增异物，输出不能与背景图相同\n"
-        "18. 整体风格必须与背景图一致，包括清晰度、锐利度、传感器噪点和色调；禁止柔化、涂抹或二次渲染导致发糊\n"
+        "18. 整张监控图禁止柔化、涂抹、降分辨率或二次渲染发糊。异物自己的色温、色调、饱和度、像素和清晰度按上面五项贴齐相邻废钢，不能比废钢更锐、更干净、更鲜艳\n"
         "19. 每一轮都只在原始监控背景上重画，不要把任何已生成图当作画布\n"
         "\n【多视图只作参考】\n"
         f"20. 第1张图是废钢监控原图，只作为画布；第2张及之后是{object_class}的多视角参考\n"
-        "21. 参考图只用来认外形、颜色、零件和直径/高度，不要把参考图里的物体直接插入场景\n"
+        "21. 参考图只用来认外形、零件和直径/高度，不要照抄参考图的鲜艳原色，颜色必须改成发灰、褪色、蒙尘；不要把参考图里的物体直接插入场景\n"
         "22. 禁止抠图、贴图、叠加、原样拷贝；禁止留下白底、摄影棚、宫格线或前/后/左/右/上/下标签\n"
         "23. 必须按本轮真实厘米在废钢堆里重新画出被埋住的同类异物，光影锈蚀与车斗一致\n"
     )
@@ -2592,7 +3203,11 @@ def generation_role_prompt(prompt: str, view_count: int = 0, references_weathere
     lines = [
         "第1张图是最初的废钢监控原图，只作为画布。必须在这张图上新增异物。",
         "废钢场景、时间戳和摄像头文字保持原样，但输出不能与这张背景图相同。",
-        "输出必须保持与这张监控原图相同的清晰度、锐利度和传感器噪点，禁止柔化、涂抹、降分辨率或二次渲染导致发糊。",
+        "色温：异物的高光、中间调、阴影与相邻废钢同一白平衡，高光不另加暖黄，阴影不另加青蓝，交界不能有一圈独立色温。",
+        "色调：只看色相和明度，跟相邻废钢，不跳纯色，不加更亮的边。不要在这句里写饱和度。",
+        "饱和度：必须发灰、发浊、蒙尘、褪色，并且明显低于周围废钢。宁可几乎看不出原来的颜色，也不要鲜艳。禁止鲜红、橘红、亮黄、翠绿、纯蓝、荧光色和高饱和色块。商品原色只留一点色相，其余混进灰尘和铁锈灰。",
+        "像素：异物细节必须低于监控原图，颗粒更粗，压缩块更明显，局部对比更低；和原图一样细仍然偏高。",
+        "清晰度：先沿用背景的拍摄晃动。废钢边缘若沿同一方向拉出拖影，异物必须同样拉糊；没有拖影时保持同样失焦。异物不能比废钢更锐。禁止把整张监控图再柔化。",
         "每一轮都只在这张原始背景上重画，不要使用任何已生成图当作画布。",
     ]
     if view_count > 0:
@@ -2603,9 +3218,9 @@ def generation_role_prompt(prompt: str, view_count: int = 0, references_weathere
                     if reference_kind == "weathered_six_view_atlas" else
                     f"后面 {view_count} 张是已生成的废旧状态物品身份参考，只参考几何、零件和旧化材质；必须在第1张原背景内重新画出同一件。"
                     if references_weathered else
-                    f"后面 {view_count} 张仅用于辨认该件几何、零件和比例；图中是新品参考，输出必须重新生成已明显旧化的报废状态。"
+                    f"后面 {view_count} 张只用来认形状、零件和比例；图中是新品参考，输出必须重新生成已明显旧化的报废状态。不要照抄参考图的鲜艳原色。"
                 ),
-                "不得继承参考图的鲜亮漆面、干净金属面、摄影棚高光、独立白平衡、锐度和标签清晰度；当前监控背景决定外观。",
+                "多视图只用来认形状、零件和比例，不要照抄参考图的鲜艳原色。不得继承参考图的鲜亮漆面、干净金属面、摄影棚高光、独立白平衡、锐度和标签清晰度；当前监控背景决定外观。",
                 "禁止把参考图里的物体直接抠图、贴图、插入、叠加或原样拷贝进第1张场景。",
                 "禁止保留白底、摄影棚、宫格分割线，以及前、后、左、右、上、下这类视角标签。",
                 "必须按本轮设定尺寸，在废钢堆里重新画出一件被埋住的同类异物，光影和锈蚀跟车斗一致。",
@@ -2823,36 +3438,26 @@ def load_app_raw() -> Dict[str, Any]:
 
 
 def route_models(raw_bailian: Dict[str, Any], raw_app: Dict[str, Any]) -> Optional[Tuple[str, str]]:
-    """
-    默认模型选择入口。暂时留空：返回 None 时改用 config.yaml / config_bailian.yaml 的 model / vlm_model。
-    以后在这里根据路由结果返回 (image_model, vlm_model)，二者可分属阿里和火山。
-    """
-    route = (raw_app.get("route") or raw_bailian.get("route") or "").strip()
-    if not route:
-        return None
+    """系列由入口按模型名决定，这里不再跨家混选。"""
+    del raw_bailian, raw_app
     return None
 
 
 def select_models(raw_bailian: Dict[str, Any], raw_app: Dict[str, Any]) -> Tuple[str, str]:
-    routed = route_models(raw_bailian, raw_app)
-    if routed:
-        print(f"[DEBUG] 模型来源: 路由函数 -> {routed[0]} / {routed[1]}")
-        return routed
-    image_model = (
-        raw_app.get("model")
-        or raw_bailian.get("model")
-        or raw_bailian.get("model_alimax_low")
-        or "wan2.7-image"
-    )
-    vlm_model = (
-        raw_app.get("vlm_model")
-        or raw_bailian.get("vlm_model")
-        or raw_bailian.get("vlm_model_ali_low")
-        or "qwen3.8-flash"
-    )
-    source = "config.yaml" if raw_app.get("model") or raw_app.get("vlm_model") else "config_bailian.yaml"
-    print(f"[DEBUG] 模型来源: {source} -> {image_model} / {vlm_model}")
-    return image_model, vlm_model
+    del raw_bailian, raw_app
+    print(f"[DEBUG] 模型来源: {THIS_SERIES} -> {CHOSEN_IMAGE} / {CHOSEN_VLM}")
+    return CHOSEN_IMAGE, CHOSEN_VLM
+
+
+def models_for_this_series(image_model: Optional[str], vlm_model: Optional[str]) -> Tuple[str, str]:
+    """只接受本系列、并且十一点配置里已经出现过的模型名。"""
+    image = image_model or DEFAULT_IMAGE
+    vlm = vlm_model or DEFAULT_VLM
+    if image not in ALLOWED_IMAGES or vlm not in ALLOWED_VLMS:
+        raise ValueError(
+            f"{THIS_SERIES} 只接受生图 {list(ALLOWED_IMAGES)}，VLM {list(ALLOWED_VLMS)}"
+        )
+    return image, vlm
 
 
 def bind_by_model(raw: Dict[str, Any], image_model: str, vlm_model: str) -> Dict[str, str]:
@@ -2980,10 +3585,12 @@ def main() -> None:
     parser.add_argument("--objects", type=str, nargs="+", help="指定物品 ID（S01–S38）、图片路径或文件名；多件时加权选取")
     parser.add_argument("--random", action="store_true", help="随机选取背景图（默认顺序遍历）")
     parser.add_argument("--analyze-only", action="store_true", help="仅分析已有的Prompt数据，不生成")
-    parser.add_argument("--model", type=str, default=None, help="覆盖生图模型，例如 wan2.7-image 或 doubao-seedream-5.0-lite")
+    parser.add_argument("--model", type=str, default=None, help="覆盖本提供方的生图模型")
+    parser.add_argument("--vlm-model", type=str, default=None, help="覆盖本提供方的 VLM")
     parser.add_argument("--output-root", type=Path, default=None, help="本次运行的独立结果目录")
     parser.add_argument("--rust-reference", type=Path, default=None, help="指定当前单件物品的现成生锈六视图，直接融合")
     args = parser.parse_args()
+    handoff_to_series(args, parser)
 
     cfg = load_app_config()
     supplied_rust_reference = None
@@ -3010,15 +3617,26 @@ def main() -> None:
         ):
             setattr(cfg, field_name, run_root / folder)
 
-    if args.model:
-        bound = bind_by_model(load_bailian_raw(), args.model, cfg.vlm_model)
+    if args.model or args.vlm_model:
+        try:
+            image_model, vlm_model = models_for_this_series(args.model, args.vlm_model)
+        except ValueError as exc:
+            parser.error(str(exc))
+        global CHOSEN_IMAGE, CHOSEN_VLM
+        CHOSEN_IMAGE, CHOSEN_VLM = image_model, vlm_model
+        bound = bind_by_model(load_bailian_raw(), image_model, vlm_model)
         cfg.image_api_key = bound["image_api_key"]
         cfg.image_api_url = bound["image_api_url"]
         cfg.image_protocol = bound["image_protocol"]
         cfg.model = bound["model"]
+        cfg.vlm_api_key = bound["vlm_api_key"]
+        cfg.vlm_api_url = bound["vlm_api_url"]
+        cfg.vlm_model = bound["vlm_model"]
         cfg.output_analysis_dir = cfg.output_analysis_dir / cfg.model
         print(f"[DEBUG] 命令行覆盖生图模型: {cfg.model} ({cfg.image_protocol})")
         print(f"[DEBUG] 图像端点: {cfg.image_api_url}")
+        print(f"[DEBUG] 命令行覆盖 VLM: {cfg.vlm_model}")
+        print(f"[DEBUG] VLM 端点: {cfg.vlm_api_url}")
         print(f"[DEBUG] Prompt 统计目录: {cfg.output_analysis_dir}")
     
     if not cfg.image_api_key or not cfg.vlm_api_key:
@@ -3326,11 +3944,7 @@ def main() -> None:
                 raise RuntimeError("生图未产出图片")
 
             final_name = f"{image_id}.{cfg.output_format}"
-            destination_dir = cfg.output_final_images_dir
-            if cfg.active_object_profile and not vlm_success:
-                destination_dir = cfg.output_final_images_dir.parent / "review_images"
-                destination_dir.mkdir(parents=True, exist_ok=True)
-            final_path = destination_dir / final_name
+            final_path = cfg.output_final_images_dir / final_name
             final_path.write_bytes(last_image_path.read_bytes())
             saved_paths = [str(final_path)]
 

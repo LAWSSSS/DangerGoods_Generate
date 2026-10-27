@@ -6,7 +6,7 @@ import hashlib
 import json
 import os
 from contextlib import contextmanager
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
@@ -16,7 +16,7 @@ from fusion_engine.errors import AcceptanceError
 
 
 def utc_now() -> str:
-    return datetime.now(UTC).isoformat()
+    return datetime.now(timezone.utc).isoformat()
 
 
 def sha256(path: Path) -> str:
@@ -50,7 +50,7 @@ def record_event(run_dir: Path, stage: str, status: str, **details: Any) -> None
 
 
 def new_run_directory(parent: Path, task_id: str) -> Path:
-    stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     run_dir = parent / task_id / f"{stamp}-{uuid4().hex[:8]}"
     run_dir.mkdir(parents=True, exist_ok=False)
     for folder in ("analysis", "masks", "prompts", "candidates", "outputs", "logs", "annotations"):

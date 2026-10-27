@@ -8,7 +8,9 @@ from pathlib import Path
 from typing import Any
 
 from fusion_quality import (
+    appearance_from_context,
     appearance_neutral_name,
+    appearance_prompt_block,
     geometry_identity,
     region_prompt,
     review_requirements,
@@ -187,13 +189,14 @@ def render_prompt(
         ),
         "第1张图是原始监控场景，后面的图只作身份/结构参考。",
         scene_context_prompt(scene_context),
+        appearance_prompt_block(appearance_from_context(scene_context)),
         size_spec(profile, target_ratio)["size_brief"],
         "身份和几何必须保留：" + "；".join(geometry_identity(profile)) + "。",
         "材质和旧化：" + profile["weathering_prompt"],
         "姿态和支撑：" + profile["pose_hint"] + "；" + profile["support_hint"] + "。",
         "遮挡：" + profile["exposure_hint"] + "。",
         "【接触与遮挡】先选真实钢板/型钢支点，把主体大部分置于废钢缝隙深处；至少一块原有宽钢板/型钢遮住主体中段并截断两侧外轮廓，不以一条细杆轻轻跨过表面代替真正埋入。露出一段可识别旧材质及安装端之一，保持完整几何尺度。接触阴影只在真实支点附近贴合产生，不能完整摆在堆顶或出现整圈描边。允许小幅重建接触处和前景遮挡边缘。",
-        "匹配原场景的明暗、色温、阴影软硬、景深、锐度、传感器噪声和压缩；接触阴影贴合真实支点，投影服从原场景光源。",
+        "接触阴影贴合真实支点，投影服从原场景光源。上面五项分开执行：色温只对齐白平衡，色调只对齐色相和明度，饱和度必须低于废钢，像素只对齐颗粒和压缩，清晰度只对齐失焦和拖影。",
         "只在原监控图内重新生成物品，不抠图/贴图/复制摄影棚底色或宫格线；保持时间戳、机位文字、料斗边框、相机视角和非目标废料结构。",
         "禁止："
         + "；".join(profile["forbidden_changes"])
@@ -232,6 +235,7 @@ def evaluator_prompt(profile: dict[str, Any]) -> str:
         "禁止建议柔化整图；sharpness与尺寸判断分开。"
         "返回visible_ratio、size_judgment（too_large|acceptable|too_small）、"
         "tone_score、size_score、overall_score（0到100）、tone_fix、size_fix、overall_fix、"
+        "color_temperature_match、tone_match、saturation_match、pixel_match、sharpness_match（bad|ok|good）、"
         "sharpness（sharp|ok|soft）、confidence（0到1）、reason、improvement_suggestion、"
         "quality_score（0到1）、fusion_quality（very bad|bad|ok|good|very good）。"
         "不确定时降低confidence并在reason说明，不把假设写成测量。"

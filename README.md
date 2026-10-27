@@ -1,5 +1,77 @@
 # 废钢背景异物合成数据生成工具
 
+## GPT参考与结构保留修订（2026-10-18 / 程序0.8.0）
+
+本次先用内置GPT工具为气瓶、阀门各生成三轮参考并完整记录，再修复VLM孔洞误删轮辐、部件细化冻结错误孔洞、损坏母版继承和重复固定调色。新路线通过可选开关启用，私有配置中的Wan/Doubao保持原设置。详见 [结构保留、按阶段归因与实际验证](docs/fusion-v3_1.md)。
+
+```bash
+python -B fusion.py run config/controlled/v3_1/S01.json --generate --provider-config config_bailian.yaml --rounds 3
+```
+
+新配置：[气瓶V3.1](config/controlled/v3_1/S01.json)、[阀门V3.1](config/controlled/v3_1/S20.json)。两件均保留原摆放和完整3840×2160画幅，逐轮绑定父候选及输入阶段，Prompt严格追加；背景、结构和视觉验收分别报告。GPT参考也有位置偏差与背景重绘，不是标注真值或已验收结果。旧配置仍可复现历史路线。
+
+## 默认三轮模型纠正（2026-10-16 / 程序0.7.0）
+
+现在 `--generate` 默认按三轮执行（首次生成+两次纠正），每轮用视觉模型检查，再把完整短修复指令追加到上轮Prompt末尾。每次重新携带原参考、完整背景和上一候选；旧文本逐字保留，不依赖模型会话记忆。Wan的5000字符上限在发送前检查，提前为全部轮次预留空间，防止新增要求被服务端截断。详见 [迭代设置与审计](docs/iterative-fusion-v3.md)。
+
+```bash
+python -B fusion.py run config/controlled/v3/S01.json --generate --provider-config config_bailian.yaml
+```
+
+两件V3配置预算均为3次生图、6次VLM调用；可用 `--rounds` 指定轮数，仍受预算限制。完整三轮不等于通过视觉或训练验收，所有候选和失败记录独立保留。
+
+## V3 分层融合修订（2026-10-16 / 程序0.6.0 / Prompt 3.0）
+
+参考用户的V3资料，加入独立实体/接触/投影/原前景/保护图层、线性光合成、部件细分、写盘后实际授权区检查，以及带实例/ROI的缺陷修复路由。用历史候选做零模型调用的离线对照，另存逐阶段图；旧路线仍可直接使用。详见 [V3使用与实现边界](docs/fusion-v3.md)。
+
+配置：[气瓶V3](config/controlled/v3/S01.json)、[阀门V3](config/controlled/v3/S20.json)。格式化提示词：[气瓶](config/controlled/formatted_prompts/v3/S01/prompt.txt)、[阀门](config/controlled/formatted_prompts/v3/S20/prompt.txt)。两者仍为A概念预览，最终完整画幅保持3840×2160。V3代码接入和像素契约通过不代表图像自然度已经验收。
+
+```bash
+python -B fusion.py validate config/controlled/v3/S20.json
+python -B fusion.py reprocess config/controlled/v3/S20.json \
+  --source-run output/controlled-v2_3-final-check/final_reprocess_v2_3_S20/20261015T101405Z-8f30ab3a \
+  --ablations --refine-masks
+```
+
+上述命令无网络调用。模型和凭据继续取自私有YAML；`run --candidate ... --provider-config ...`可调用VLM辅助观察，`run --generate --provider-config ...`才调用生图。投影证据不足时保留UNKNOWN；未接入三维求解、原生mask编辑、专用matting或物理重照明。
+
+## 完整画幅、承托与光色修订（2026-10-15 / 程序0.5.0 / Prompt 2.3）
+
+本轮先修算法再修提示词：完整背景输入与原尺寸PNG输出、小幅背景配准、候选语义点辅助分割、独立承载面的接触检查、可靠ROI筛选、分表面光色校正、越界实体拒绝渲染、有限接触遮蔽、低细节落位引导及带上一候选的纠正生成。详细流程、参数与实际结果见 [修订说明](docs/fusion-v2_3.md)。
+
+使用 [气瓶2.3配置](config/controlled/v2_3/S01.json)、[阀门2.3配置](config/controlled/v2_3/S20.json)；实际共用提示词见 [气瓶](config/controlled/formatted_prompts/v2_3/S01/prompt.txt)、[阀门](config/controlled/formatted_prompts/v2_3/S20/prompt.txt)。两者均启用 `preserve_full_frame=true`、关闭裁切，最终母版应为3840×2160。接口编辑输出有像素上限，归一化过程单独记录，不宣称原生4K生成。
+
+```bash
+python -B fusion.py plan config/controlled/v2_3/S01.json --output work/my-v23-plan
+# 真实调用，按每件独立预算执行；沿用用户私有YAML中的模型与凭据。
+python -B fusion.py run config/controlled/v2_3/S01.json --generate --provider-config config_bailian.yaml
+```
+
+本次已实际生图复测并保留失败记录，不把诊断图或被拒收候选标成已通过。0.4.0和2.1/2.2说明为历史版本，新任务使用2.3；物理尺度、承重和3D稳定性仍未标定。
+
+## 几何与局部光色修订（2026-10-15 / 程序0.4.0 / Prompt 2.2）
+
+新增上下文裁切与坐标回映射、前景孔洞/禁入/支点检查、候选可见轮廓风险诊断、同像素背景配对光色校正、分表面残漆/高光控制，以及可审计的近不透明Alpha处理。详见[完整修订说明](docs/fusion-v2_2.md)。
+
+本轮使用新配置：[气瓶](config/controlled/v2_2/S01.json)、[阀门](config/controlled/v2_2/S20.json)；详细提示词：[气瓶Prompt 2.2](config/controlled/formatted_prompts/v2_2/S01/prompt.txt)、[阀门Prompt 2.2](config/controlled/formatted_prompts/v2_2/S20/prompt.txt)。阀门建议中心y由0.61改为0.54，气瓶保持原位置和尺寸。区域、支点及投影代理均未冒充已核验几何；A模式仍是预览。
+
+```bash
+python -B fusion.py plan config/controlled/v2_2/S20.json --output work/my-v22-plan
+```
+
+该命令离线规划并导出实际背景裁切。当前未启动新的图像生成；视觉模型按用户追加授权请求3次，取得1份有效审阅并采纳代码修订，新版生成自然度尚未复测。2.1配置与导出保留为对照，旧任务不会自动升级到2.2。
+
+## 场景适配 Prompt 2.1（2026-10-15 / 程序0.3.1）
+
+提示词改为九个区块，分别说明背景光色、参考职责、身份/完整投影、材质、接触遮挡与负面约束。新增两件物品的修订配置，保留上次测试的摆放参数。详见 [修订说明](docs/prompt-v2_1.md)，可直接查看 [气瓶Prompt](config/controlled/formatted_prompts/v2_1/S01/prompt.txt) 和 [阀门Prompt](config/controlled/formatted_prompts/v2_1/S20/prompt.txt)。
+
+```bash
+python -B fusion.py prompt config/controlled/rusted_S01.prompt-v2_1.json \
+  --output work/prompt-v2_1/my-S01
+```
+
+此命令只导出格式化提示词，不调用图像/VLM模型。通用文本在 `src/fusion_engine/templates/scene_fusion_v2_1.yaml`，逐件要求在任务JSON的 `prompt_directives` 中。
+
 ## 手册驱动的受控融合入口（2026-10-15 / 0.3.0）
 
 新增 `fusion.py`：多物品完整投影 OBB、六类 Mask、支撑/局部遮挡、按部件旧化、背景像素保护、预算和哈希绑定验收。详见 [使用说明](docs/controlled-fusion-v2.md)、[手册实现映射](docs/manual-v2-implementation-matrix.md) 和 [版本说明](docs/CHANGELOG-controlled-fusion.md)。

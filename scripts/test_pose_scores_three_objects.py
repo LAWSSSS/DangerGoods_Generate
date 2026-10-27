@@ -217,9 +217,9 @@ def worker(run_string, job):
                     state["stage"] = f"prompt_round_{len(result['rounds'])+1}"
                     return super().compose_generation_prompt(*args, **kwargs)
 
-                def evaluate_generated_image(self, image_path, cls, prompt, target_ratio=None, size_spec=None, size_rounds=None):
+                def evaluate_generated_image(self, image_path, cls, prompt, target_ratio=None, size_spec=None, size_rounds=None, **kwargs):
                     state["stage"] = f"evaluation_round_{len(result['rounds'])}"
-                    old = super().evaluate_generated_image(image_path, cls, prompt, target_ratio, size_spec, size_rounds)
+                    old = super().evaluate_generated_image(image_path, cls, prompt, target_ratio, size_spec, size_rounds, **kwargs)
                     row = result["rounds"][-1]
                     row["baseline_evaluation"] = dict(old)
                     row["baseline_evaluation_valid"] = strict_old_evaluation(old, state["qwen_ok"])

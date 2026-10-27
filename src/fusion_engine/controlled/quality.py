@@ -48,7 +48,7 @@ def evaluate(prepared: Prepared, master: np.ndarray, review: dict | None = None)
     delta = protected_delta(scene, master, protect)
     checks["background_lock"] = check(
         "NOT_APPLICABLE"
-        if mode == "A"
+        if mode == "A" and job.data["constraints"]["background_protection"] != "strict"
         else (
             "UNKNOWN"
             if not delta["applicable"]
@@ -141,6 +141,23 @@ def evaluate(prepared: Prepared, master: np.ndarray, review: dict | None = None)
             checks[f"mask_consistency_{oid}"] = check(
                 "PASS" if consistent else "FAIL",
                 "独立可见轮廓必须属于完整轮廓，且不得覆盖保护/原前景像素",
+            )
+        spatial = item.get("spatial_constraints", {})
+        if full is not None and "forbidden" in spatial:
+            forbidden, _ = read_mask(job, spatial["forbidden"], scene.shape[:2])
+            overlap = int((full & forbidden).sum())
+            checks[f"actual_forbidden_{oid}"] = check(
+                "FAIL" if overlap else "PASS",
+                "独立审核的完整投影不得进入声明的二维禁入区",
+                pixels=overlap,
+            )
+        interval = spatial.get("occluded_fraction_range")
+        if full is not None and full.any() and interval:
+            occluded_fraction = float((full & masks.arrays["fg_occ"]).sum() / full.sum())
+            checks[f"actual_occlusion_{oid}"] = check(
+                "PASS" if interval[0] <= occluded_fraction <= interval[1] else "FAIL",
+                "独立完整投影与原前景遮挡区的交集比例，不把可见框当完整投影",
+                fraction=occluded_fraction,
             )
     if job.data["constraints"]["require_support"]:
         support_regions = {

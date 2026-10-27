@@ -10,8 +10,10 @@ from fusion_engine.artifacts import write_json
 from fusion_engine.controlled import VERSION
 from fusion_engine.controlled.adapters import ConfiguredImageAdapter
 from fusion_engine.controlled.catalog import ablation_matrix, from_catalog
+from fusion_engine.controlled.iteration import IterationPolicy
 from fusion_engine.controlled.job import load_job, validate_document
 from fusion_engine.controlled.planning import prepare
+from fusion_engine.controlled.prompting import build_prompt_document
 from fusion_engine.controlled.schema import job_schema, review_schema
 from fusion_engine.controlled.workflow import review_run, run, write_plan
 from fusion_engine.errors import FusionError
@@ -46,8 +48,8 @@ def parser() -> argparse.ArgumentParser:
     schema = commands.add_parser("schema", help="输出任务/人工验收 JSON Schema")
     schema.add_argument("--kind", choices=("job", "review"), default="job")
     schema.add_argument("--output", type=Path)
-    for name in ("validate", "plan", "ablation-matrix"):
-        command = commands.add_parser(name, help="离线校验/规划/消融计划；不调用模型")
+    for name in ("validate", "plan", "ablation-matrix", "prompt"):
+        command = commands.add_parser(name, help="离线校验/规划/格式化提示词/消融计划；不调用模型")
         command.add_argument("job", type=Path)
         if name != "validate":
             command.add_argument("--output", type=Path, required=True)
@@ -59,12 +61,36 @@ def parser() -> argparse.ArgumentParser:
     preview.add_argument("job", type=Path)
     preview.add_argument("--provider-config", type=Path, required=True)
     preview.add_argument("--output", type=Path, required=True)
-    execute = commands.add_parser("run", help="处理导入候选；只有 --generate 才发模型请求")
+    execute = commands.add_parser(
+        "run", help="--generate调用生图；导入时显式提供provider-config可调用VLM辅助处理"
+    )
     execute.add_argument("job", type=Path)
     source = execute.add_mutually_exclusive_group(required=True)
     source.add_argument("--candidate", type=Path)
     source.add_argument("--generate", action="store_true")
     execute.add_argument("--provider-config", type=Path)
+    execute.add_argument(
+        "--rounds",
+        type=int,
+        choices=range(1, 6),
+        help="生图总轮数，含首轮；默认3，仍受任务预算限制",
+    )
+    replay = commands.add_parser("reprocess", help="离线冻结历史候选与轮廓，按V3处理；零模型调用")
+    replay.add_argument("job", type=Path)
+    replay.add_argument("--source-run", type=Path, required=True)
+    replay.add_argument("--candidate-id", default="candidate-001")
+    replay.add_argument(
+        "--refine-masks",
+        action="store_true",
+        help="复用缓存VLM观察，重新估计部件轮廓；与冻结Mask对照独立记录",
+    )
+    replay.add_argument("--ablations", action="store_true", help="额外保存固定候选的算法对照")
+    execute.add_argument(
+        "--candidate-frame",
+        choices=("original", "request"),
+        default="original",
+        help="导入文件的坐标画布；默认整张原图，局部模型输出需显式选request",
+    )
     review = commands.add_parser("review", help="应用显式人工验收证据；硬失败和未知不能自动合格")
     review.add_argument("run_dir", type=Path)
     review.add_argument("--candidate-id", required=True)
@@ -102,9 +128,30 @@ def main(argv: list[str] | None = None) -> int:
                 emit({"output": str(destination)})
             else:
                 emit(result)
-        elif args.command in ("validate", "plan", "ablation-matrix"):
+        elif args.command in ("validate", "plan", "ablation-matrix", "prompt"):
             job = load_job(args.job)
-            if args.command == "ablation-matrix":
+            if args.command == "prompt":
+                document = (
+                    prepare(job).plan["prompt_document"]
+                    if job.data.get("prompt_version") in ("2.2", "2.3", "3.0")
+                    else build_prompt_document(job.data)
+                )
+                destination = safe_new_output(args.output, job.workspace, directory=True)
+                destination.mkdir(exist_ok=False)
+                (destination / "prompt.txt").write_text(document["text"], encoding="utf-8")
+                write_json(destination / "prompt.json", document)
+                emit(
+                    {
+                        "output": str(destination),
+                        "format_version": document["format_version"],
+                        "section_count": len(document["sections"]),
+                        "model_calls": 0,
+                        "validation_scope": "schema_assets_plan_and_prompt"
+                        if job.data.get("prompt_version") in ("2.2", "2.3", "3.0")
+                        else "schema_and_prompt_format_only",
+                    }
+                )
+            elif args.command == "ablation-matrix":
                 destination = safe_new_output(args.output, job.workspace)
                 write_json(destination, ablation_matrix(job.data))
                 emit({"output": str(destination), "model_calls": 0})
@@ -148,6 +195,7 @@ def main(argv: list[str] | None = None) -> int:
                     "readiness": prepared.plan["readiness"],
                     "execution_allowed": prepared.plan["readiness"] == "READY",
                     "model_calls": 0,
+                    "iteration_policy": IterationPolicy.from_job(job).plan(job, generate=True),
                 },
             )
             emit(
@@ -157,12 +205,34 @@ def main(argv: list[str] | None = None) -> int:
                     "model_calls": 0,
                 }
             )
+        elif args.command == "reprocess":
+            from fusion_engine.controlled.fusion_v3.replay import reprocess
+
+            result = reprocess(
+                load_job(args.job),
+                args.source_run,
+                args.candidate_id,
+                ablations=args.ablations,
+                refine_masks=args.refine_masks,
+            )
+            emit(
+                {
+                    "status": result["status"],
+                    "run_dir": result["run_dir"],
+                    "execution": result["execution"],
+                    "output": result.get("output"),
+                    "visual_review": "REVIEW_REQUIRED",
+                }
+            )
+            return exit_status(result["status"])
         elif args.command == "run":
             result = run(
                 load_job(args.job),
                 candidate=args.candidate,
                 generate=args.generate,
                 provider_config=args.provider_config,
+                candidate_frame=args.candidate_frame,
+                max_rounds=args.rounds,
             )
             emit(
                 {
@@ -170,6 +240,17 @@ def main(argv: list[str] | None = None) -> int:
                     "run_dir": result["run_dir"],
                     "execution": result["execution"],
                     "candidate_count": len(result["candidates"]),
+                    "candidate_diagnostics": [
+                        {
+                            "id": value["id"],
+                            "quality": value["quality"]["status"],
+                            "geometry": value.get("processing", {})
+                            .get("candidate_geometry", {})
+                            .get("status"),
+                            "processing": value.get("processing", {}).get("status", "APPLIED"),
+                        }
+                        for value in result["candidates"]
+                    ],
                 }
             )
             return exit_status(result["status"])

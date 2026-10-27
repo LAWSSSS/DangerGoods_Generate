@@ -1,0 +1,904 @@
+{
+  "schema_version": "2.0",
+  "task_id": "controlled_rust_v2_2_S01",
+  "workspace": "../../..",
+  "mode": "A",
+  "background": {
+    "path": "input/backgrounds/2026_08_06_36_1_zhongfei1_95_zhongfei2_5_19.jpg",
+    "sha256": "91dc02b70ca851caceef765e5b2f46f8ead3a7784aa474d7d1b71f52337b624e",
+    "width": 3840,
+    "height": 2160,
+    "description": "用户提供的原始场景；叠字/前景/承载区需标注",
+    "protect": {
+      "polygons": [
+        [
+          [
+            0.01,
+            0.005
+          ],
+          [
+            0.43,
+            0.005
+          ],
+          [
+            0.43,
+            0.1
+          ],
+          [
+            0.01,
+            0.1
+          ]
+        ],
+        [
+          [
+            0.7,
+            0.8
+          ],
+          [
+            0.88,
+            0.8
+          ],
+          [
+            0.88,
+            0.91
+          ],
+          [
+            0.7,
+            0.91
+          ]
+        ],
+        [
+          [
+            0.15,
+            0.89
+          ],
+          [
+            0.22,
+            0.89
+          ],
+          [
+            0.22,
+            0.97
+          ],
+          [
+            0.15,
+            0.97
+          ]
+        ]
+      ],
+      "coordinate_space": "normalized_original_background",
+      "evidence": {
+        "source": "proposal",
+        "confirmed": false,
+        "notes": "根据可见叠字位置建立预览保护ROI，不是物体分割/遮挡真值"
+      }
+    }
+  },
+  "objects": [
+    {
+      "id": "S01",
+      "category": "红色 CCS 长型工业气瓶",
+      "references": [
+        {
+          "path": "/Users/liuzhaocheng/Desktop/生锈六视图/02_生锈CCS气瓶_六视图.png",
+          "view_id": "atlas",
+          "sha256": "be532bc5dbe2f74834104b4d6ab38b6fc6513ca47fcee96da0250fae7ed7c258",
+          "source_kind": "rusted_atlas",
+          "orientation_hint": "六视图仅表示同一物体；不作为正交三维测量",
+          "complete": true
+        }
+      ],
+      "dimensions": {
+        "status": "estimated",
+        "units": "mm",
+        "values": {
+          "总高": 1400,
+          "瓶身外径": 219
+        },
+        "ranges": {
+          "总高": [
+            1300,
+            1500
+          ]
+        },
+        "evidence": {
+          "source": "estimate",
+          "confirmed": false,
+          "notes": "工作值取自既有说明和参考外形，具体实例尺寸/型号尚未实测确认。"
+        }
+      },
+      "identity": {
+        "level": "instance",
+        "critical_parts": [
+          "细长红色圆柱",
+          "圆肩与带开孔的保护帽",
+          "平直瓶身与圆底"
+        ],
+        "positive": [
+          "细长红色圆柱",
+          "圆肩与带开孔的保护帽",
+          "平直瓶身与圆底"
+        ],
+        "negative": [
+          "按便携小气瓶尺寸生成",
+          "生成六只并排气瓶",
+          "把保护帽改成灭火器握把"
+        ]
+      },
+      "material_parts": [
+        {
+          "id": "body",
+          "base_material": "painted_steel",
+          "evidence": {
+            "source": "proposal",
+            "confirmed": false,
+            "notes": "从旧目录迁移的材质提示；需补充橡胶/玻璃/塑料等独立部件",
+            "confidence": 0.2
+          }
+        }
+      ],
+      "ageing": {
+        "level": 3,
+        "exposure_history": "场景中长期弃置；具体暴露史待确认",
+        "allow_structural_damage": false
+      },
+      "placement": {
+        "box_type": "oriented",
+        "coordinate_space": "normalized_original_background",
+        "center": [
+          0.58,
+          0.68
+        ],
+        "width": 0.3,
+        "height": 0.0834,
+        "rotation_deg": -12,
+        "allow_crop": false,
+        "status": "proposed",
+        "evidence": {
+          "source": "proposal",
+          "confirmed": false,
+          "notes": "本次效果预览的图像空间摆放建议，未经物理尺度/承载核验",
+          "confidence": 0.3
+        },
+        "scale": {
+          "level": 0,
+          "evidence": {
+            "source": "proposal",
+            "confirmed": false,
+            "notes": "未沿用 2.4m 料斗跨度假设；实际尺度参照待补充",
+            "confidence": 0.2
+          }
+        },
+        "pose_3d_notes": "长轴在画面内向右上方12°延伸，瓶帽位于左端，瓶底位于右端；瓶身不折弯，近下侧两处获得承托。"
+      },
+      "masks": {
+        "obj_full": {
+          "polygons": [
+            [
+              [
+                0.43494433,
+                0.72372918
+              ],
+              [
+                0.46428876,
+                0.71264056
+              ],
+              [
+                0.47123889,
+                0.69381424
+              ],
+              [
+                0.48161115,
+                0.67795794
+              ],
+              [
+                0.49589322,
+                0.66915053
+              ],
+              [
+                0.69250088,
+                0.59485675
+              ],
+              [
+                0.71421242,
+                0.59688402
+              ],
+              [
+                0.72496648,
+                0.60987293
+              ],
+              [
+                0.7284778,
+                0.63924083
+              ],
+              [
+                0.7216252,
+                0.65888292
+              ],
+              [
+                0.70225454,
+                0.67643426
+              ],
+              [
+                0.50564687,
+                0.75072804
+              ],
+              [
+                0.49058451,
+                0.75300925
+              ],
+              [
+                0.47748123,
+                0.74602385
+              ],
+              [
+                0.46682471,
+                0.73385071
+              ],
+              [
+                0.43748028,
+                0.74493933
+              ]
+            ]
+          ],
+          "coordinate_space": "normalized_original_background",
+          "evidence": {
+            "source": "proposal",
+            "confirmed": false,
+            "confidence": 0.3,
+            "notes": "S01按参考结构和目标姿态构造的完整投影代理；不是实际生成分割，不是CAD或实测轮廓。"
+          }
+        },
+        "fg_occ": {
+          "polygons": [
+            [
+              [
+                0.765,
+                0.463
+              ],
+              [
+                0.778,
+                0.486
+              ],
+              [
+                0.478,
+                0.842
+              ],
+              [
+                0.465,
+                0.819
+              ]
+            ]
+          ],
+          "coordinate_space": "normalized_original_background",
+          "evidence": {
+            "source": "proposal",
+            "confirmed": false,
+            "confidence": 0.3,
+            "notes": "原场景斜长钢条的建议轮廓，保持从右上到左下连续；镂空槽不作为实体遮挡。边缘为人工式视觉估计，待用户审核。"
+          },
+          "exclude_polygons": [
+            [
+              [
+                0.601,
+                0.672
+              ],
+              [
+                0.606,
+                0.678
+              ],
+              [
+                0.62,
+                0.663
+              ],
+              [
+                0.616,
+                0.655
+              ]
+            ]
+          ]
+        },
+        "contact": {
+          "polygons": [
+            [
+              [
+                0.5023846399999999,
+                0.74129259
+              ],
+              [
+                0.53238464,
+                0.74129259
+              ],
+              [
+                0.53238464,
+                0.76029259
+              ],
+              [
+                0.5023846399999999,
+                0.76029259
+              ]
+            ],
+            [
+              [
+                0.65791011,
+                0.6825228799999999
+              ],
+              [
+                0.68791011,
+                0.6825228799999999
+              ],
+              [
+                0.68791011,
+                0.70152288
+              ],
+              [
+                0.65791011,
+                0.70152288
+              ]
+            ]
+          ],
+          "coordinate_space": "normalized_original_background",
+          "evidence": {
+            "source": "proposal",
+            "confirmed": false,
+            "confidence": 0.3,
+            "notes": "只允许在下缘两处建议接触区域重建接触与局部阴影；不允许整片重绘或黑影托底。"
+          }
+        }
+      },
+      "support_contacts": [
+        {
+          "support_id": "support_S01_1",
+          "point": [
+            0.51738464,
+            0.74629259
+          ],
+          "evidence": {
+            "source": "proposal",
+            "confirmed": false,
+            "confidence": 0.3,
+            "notes": "投影代理下缘的建议接触点；不是实际生成结果的已确认接触。"
+          }
+        },
+        {
+          "support_id": "support_S01_2",
+          "point": [
+            0.67291011,
+            0.68752288
+          ],
+          "evidence": {
+            "source": "proposal",
+            "confirmed": false,
+            "confidence": 0.3,
+            "notes": "投影代理下缘的建议接触点；不是实际生成结果的已确认接触。"
+          }
+        }
+      ],
+      "render_class": "opaque_rigid",
+      "prompt_directives": {
+        "identity": [
+          "瓶帽在左端、瓶底在右端，完整长轴与指定倾角一致；不能用更短更粗的气瓶替换。"
+        ],
+        "appearance": [
+          "红漆仅作不连续的暗灰红/灰粉残漆；锈蚀、旧漆和覆灰各有不同粗糙度，受光上缘也不能形成独立亮带。",
+          "CCS一带字迹为污旧痕迹，局部断裂、蒙灰、低对比；不把白字做成全图最清晰最亮的主体标识。"
+        ],
+        "contact": [
+          "瓶身下侧在两个分开的建议接触区与废钢相接；两点之间可有局部间隙，避免整条下缘等宽发黑。承托应依靠可辨钢件，不能凭空添加支架。"
+        ],
+        "occlusion": [
+          "原图斜长钢条连续位于瓶身前方；瓶身被挡处保持相同轴线和直径。钢条孔洞只显示实际视线后的内容，不能让瓶体从钢条实体表面穿出。"
+        ]
+      },
+      "spatial_constraints": {
+        "edit_envelope": {
+          "polygons": [
+            [
+              [
+                0.41153424,
+                0.68184373
+              ],
+              [
+                0.73432295,
+                0.55986888
+              ],
+              [
+                0.74846576,
+                0.67815627
+              ],
+              [
+                0.42567705,
+                0.80013112
+              ]
+            ],
+            [
+              [
+                0.5023846399999999,
+                0.74129259
+              ],
+              [
+                0.53238464,
+                0.74129259
+              ],
+              [
+                0.53238464,
+                0.76029259
+              ],
+              [
+                0.5023846399999999,
+                0.76029259
+              ]
+            ],
+            [
+              [
+                0.65791011,
+                0.6825228799999999
+              ],
+              [
+                0.68791011,
+                0.6825228799999999
+              ],
+              [
+                0.68791011,
+                0.70152288
+              ],
+              [
+                0.65791011,
+                0.70152288
+              ]
+            ]
+          ],
+          "coordinate_space": "normalized_original_background",
+          "evidence": {
+            "source": "proposal",
+            "confirmed": false,
+            "confidence": 0.3,
+            "notes": "独立允许编辑包络，容纳少量轮廓偏差与接触交互；不是物体分割。最终处理采用候选估计可见轮廓，不能按投影代理裁掉主体。"
+          }
+        },
+        "forbidden": {
+          "polygons": [
+            [
+              [
+                0.775,
+                0.595
+              ],
+              [
+                0.799,
+                0.595
+              ],
+              [
+                0.799,
+                0.795
+              ],
+              [
+                0.775,
+                0.795
+              ]
+            ]
+          ],
+          "coordinate_space": "normalized_original_background",
+          "evidence": {
+            "source": "proposal",
+            "confirmed": false,
+            "confidence": 0.3,
+            "notes": "右侧可见螺纹杆保留其原有位置；气瓶不能伸入此二维保护带。投影禁入不等于完整三维碰撞体。"
+          }
+        },
+        "minimum_contact_count": 2,
+        "occluded_fraction_range": [
+          0.02,
+          0.45
+        ]
+      }
+    }
+  ],
+  "scene": {
+    "lighting": "目标位置的受光、阴面与投影沿用原图附近废钢的明暗；保留现有局部遮蔽和柔和环境填充，不新增独立补光。",
+    "camera_style": "沿用这帧现场监控的灰雾过渡、有限细节、噪声与压缩质感；新物体与同深度废钢保持相称的局部对比和边缘清晰度。",
+    "support_regions": [
+      {
+        "id": "support_S01_1",
+        "mask": {
+          "polygons": [
+            [
+              [
+                0.5033846399999999,
+                0.74429259
+              ],
+              [
+                0.53138464,
+                0.74429259
+              ],
+              [
+                0.53138464,
+                0.76029259
+              ],
+              [
+                0.5033846399999999,
+                0.76029259
+              ]
+            ]
+          ],
+          "coordinate_space": "normalized_original_background",
+          "evidence": {
+            "source": "proposal",
+            "confirmed": false,
+            "confidence": 0.3,
+            "notes": "依据画面与目标下缘提出的承托区；没有载荷、深度或三维稳定性证据。"
+          }
+        },
+        "load_bearing": "unknown",
+        "description": "建议承托区1，位于指定支点附近的原有废钢表面；先形成局部相接，再产生窄缝接触暗部，不能画成整圈黑底。"
+      },
+      {
+        "id": "support_S01_2",
+        "mask": {
+          "polygons": [
+            [
+              [
+                0.65891011,
+                0.68552288
+              ],
+              [
+                0.68691011,
+                0.68552288
+              ],
+              [
+                0.68691011,
+                0.70152288
+              ],
+              [
+                0.65891011,
+                0.70152288
+              ]
+            ]
+          ],
+          "coordinate_space": "normalized_original_background",
+          "evidence": {
+            "source": "proposal",
+            "confirmed": false,
+            "confidence": 0.3,
+            "notes": "依据画面与目标下缘提出的承托区；没有载荷、深度或三维稳定性证据。"
+          }
+        },
+        "load_bearing": "unknown",
+        "description": "建议承托区2，位于指定支点附近的原有废钢表面；先形成局部相接，再产生窄缝接触暗部，不能画成整圈黑底。"
+      }
+    ],
+    "occlusion_edges": [],
+    "evidence": {
+      "source": "proposal",
+      "confirmed": false,
+      "notes": "待场景分析；未执行深度估计和三维重建",
+      "confidence": 0.2
+    }
+  },
+  "constraints": {
+    "require_support": true,
+    "require_foreground_occlusion": true,
+    "require_confirmed_masks": true,
+    "background_protection": "strict",
+    "require_stability_evidence": true,
+    "enforce_spatial_plan": true
+  },
+  "generator": {
+    "adapter": "bailian",
+    "route": "guided_generation_then_restore",
+    "output_registration": "resize_same_aspect",
+    "context_crop": true,
+    "context_padding_ratio": 0.25,
+    "alpha_policy": "near_opaque_unassociated_rgb",
+    "near_opaque_min_alpha": 251
+  },
+  "budget": {
+    "max_image_calls": 1,
+    "max_vlm_calls": 0,
+    "max_candidates": 1
+  },
+  "harmonization": {
+    "mode": "paired_local",
+    "paired_anchors": [
+      {
+        "id": "left_dust",
+        "mask": {
+          "polygons": [
+            [
+              [
+                0.448,
+                0.578
+              ],
+              [
+                0.478,
+                0.578
+              ],
+              [
+                0.478,
+                0.602
+              ],
+              [
+                0.448,
+                0.602
+              ]
+            ]
+          ],
+          "coordinate_space": "normalized_original_background",
+          "evidence": {
+            "source": "proposal",
+            "confirmed": false,
+            "confidence": 0.3,
+            "notes": "气瓶左上邻近的覆灰钢面，避开绿色篷布与文字；建议配对区，使用同像素前后差分，不把其颜色当物体颜色。"
+          }
+        },
+        "description": "气瓶左上邻近的覆灰钢面，避开绿色篷布与文字"
+      },
+      {
+        "id": "right_dust",
+        "mask": {
+          "polygons": [
+            [
+              [
+                0.748,
+                0.645
+              ],
+              [
+                0.765,
+                0.645
+              ],
+              [
+                0.765,
+                0.67
+              ],
+              [
+                0.748,
+                0.67
+              ]
+            ]
+          ],
+          "coordinate_space": "normalized_original_background",
+          "evidence": {
+            "source": "proposal",
+            "confirmed": false,
+            "confidence": 0.3,
+            "notes": "气瓶右侧同一区域的灰褐废钢面；建议配对区，使用同像素前后差分，不把其颜色当物体颜色。"
+          }
+        },
+        "description": "气瓶右侧同一区域的灰褐废钢面"
+      },
+      {
+        "id": "lower_dust",
+        "mask": {
+          "polygons": [
+            [
+              [
+                0.53,
+                0.823
+              ],
+              [
+                0.553,
+                0.823
+              ],
+              [
+                0.553,
+                0.843
+              ],
+              [
+                0.53,
+                0.843
+              ]
+            ]
+          ],
+          "coordinate_space": "normalized_original_background",
+          "evidence": {
+            "source": "proposal",
+            "confirmed": false,
+            "confidence": 0.3,
+            "notes": "气瓶下方覆灰钢板的中间调表面；建议配对区，使用同像素前后差分，不把其颜色当物体颜色。"
+          }
+        },
+        "description": "气瓶下方覆灰钢板的中间调表面"
+      }
+    ],
+    "allow_proposed_anchors": true,
+    "min_anchor_pixels": 128,
+    "max_exposure_stops": 0.4,
+    "max_chromatic_stops": 0.18,
+    "strength": 0.75,
+    "max_pair_residual": 0.06,
+    "min_pair_inlier_fraction": 0.6,
+    "surface_adjustments": [
+      {
+        "id": "paint",
+        "object_id": "S01",
+        "region": {
+          "polygons": [
+            [
+              [
+                0.43494433,
+                0.72372918
+              ],
+              [
+                0.46428876,
+                0.71264056
+              ],
+              [
+                0.47123889,
+                0.69381424
+              ],
+              [
+                0.48161115,
+                0.67795794
+              ],
+              [
+                0.49589322,
+                0.66915053
+              ],
+              [
+                0.69250088,
+                0.59485675
+              ],
+              [
+                0.71421242,
+                0.59688402
+              ],
+              [
+                0.72496648,
+                0.60987293
+              ],
+              [
+                0.7284778,
+                0.63924083
+              ],
+              [
+                0.7216252,
+                0.65888292
+              ],
+              [
+                0.70225454,
+                0.67643426
+              ],
+              [
+                0.50564687,
+                0.75072804
+              ],
+              [
+                0.49058451,
+                0.75300925
+              ],
+              [
+                0.47748123,
+                0.74602385
+              ],
+              [
+                0.46682471,
+                0.73385071
+              ],
+              [
+                0.43748028,
+                0.74493933
+              ]
+            ]
+          ],
+          "coordinate_space": "normalized_original_background",
+          "evidence": {
+            "source": "proposal",
+            "confirmed": false,
+            "confidence": 0.3,
+            "notes": "残留红漆失光、蒙灰，按原色相保留局部红色；限制商品式鲜红与均匀白亮筒身。"
+          },
+          "exclude_polygons": [
+            [
+              [
+                0.51818997,
+                0.67607244
+              ],
+              [
+                0.62676436,
+                0.63504454
+              ],
+              [
+                0.63047075,
+                0.66604399
+              ],
+              [
+                0.52189636,
+                0.7070719
+              ]
+            ]
+          ]
+        },
+        "chroma_scale": 0.72,
+        "max_lab_chroma": 29,
+        "highlight_knee_l": 74,
+        "highlight_slope": 0.55,
+        "strength": 0.85
+      },
+      {
+        "id": "old_marking",
+        "object_id": "S01",
+        "region": {
+          "polygons": [
+            [
+              [
+                0.51818997,
+                0.67607244
+              ],
+              [
+                0.62676436,
+                0.63504454
+              ],
+              [
+                0.63047075,
+                0.66604399
+              ],
+              [
+                0.52189636,
+                0.7070719
+              ]
+            ]
+          ],
+          "coordinate_space": "normalized_original_background",
+          "evidence": {
+            "source": "proposal",
+            "confirmed": false,
+            "confidence": 0.3,
+            "notes": "CCS区域仅保留污旧字迹，白字与邻近受光表面相容，不独立发白、补字或锐化。"
+          }
+        },
+        "highlight_knee_l": 65,
+        "highlight_slope": 0.42,
+        "strength": 0.85
+      }
+    ],
+    "blur_sigma_px": 0.35,
+    "noise_std": 0,
+    "feather_radius_px": 4
+  },
+  "evaluation": {
+    "center_error_max": 0.02,
+    "scale_log_error_max": 0.25,
+    "rotation_error_max_deg": 10,
+    "mask_iou_min": 0.8,
+    "contact_gap_max_px": 4,
+    "min_changed_visible_fraction": 0.02,
+    "required_visual_checks": [
+      "identity",
+      "support",
+      "occlusion",
+      "material",
+      "lighting",
+      "style",
+      "object_count",
+      "realism"
+    ],
+    "require_observed_masks": true
+  },
+  "output_dir": "output/controlled-v2_2",
+  "prompt_directives": {
+    "scene_style": [
+      "当前目标附近主要是覆灰的灰褐、灰粉和冷灰废钢，物体呈现相近的低饱和、蒙灰与局部受光层次。绿色篷布只在面向它的表面形成弱环境反射，不把整件物体染绿。",
+      "沿用这帧监控的灰雾、较平的局部对比、亮部略泛白和有限细节；阴面仍有环境填充，不单独给物体增加鲜艳、深黑或锐亮的对比。",
+      "保持原图灰钢、绿色篷布与整体曝光。通过新物体的材质响应和局部成像适应背景，不把背景压暗、染色或柔化来衬托物体。"
+    ],
+    "negative": [
+      "与该位置覆灰废钢不相称的鲜艳残漆、亮金属外壳、过清晰凸字、独立暖色光和高对比亮边。"
+    ]
+  },
+  "prompt_version": "2.2",
+  "candidate_geometry": {
+    "method": "grabcut_difference",
+    "seed": 42,
+    "iterations": 3,
+    "max_side": 1000,
+    "difference_floor": 12,
+    "max_background_difference": 40,
+    "min_visible_iou": 0.4,
+    "max_escape_fraction": 0.03,
+    "contact_tolerance_px": 14,
+    "reject_on_risk": true,
+    "min_seed_density": 0.03,
+    "min_area_ratio": 0.2,
+    "max_area_ratio": 3,
+    "max_component_count": 8
+  }
+}

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "controlled-scene-fusion"
-version = "0.3.0"
+version = "0.8.1"
 description = "Evidence-aware multi-object scene fusion following the Chinese implementation manual"
 requires-python = ">=3.11"
 dependencies = [
@@ -20,7 +20,7 @@ scene-fusion = "fusion_engine.controlled.cli:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-fusion_engine = ["schemas/*.json"]
+fusion_engine = ["schemas/*.json", "templates/*.yaml"]
 
 [tool.ruff]
 line-length = 100

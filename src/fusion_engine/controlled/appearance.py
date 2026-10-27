@@ -5,8 +5,11 @@ from __future__ import annotations
 import cv2
 import numpy as np
 
+from fusion_engine.controlled.camera_feedback import apply_user_appearance_feedback
+from fusion_engine.controlled.grounding import render_contact
 from fusion_engine.controlled.job import ControlledJob, evidence_confirmed
 from fusion_engine.controlled.masks import MaskBundle, read_mask
+from fusion_engine.controlled.photometry import adjust_surfaces, paired_local_correction
 from fusion_engine.errors import ConfigError
 
 MATERIAL_RULES = {
@@ -76,14 +79,64 @@ def roi_statistics(image: np.ndarray, mask: np.ndarray) -> dict:
     }
 
 
-def harmonize(
-    scene: np.ndarray, candidate: np.ndarray, job: ControlledJob, masks: MaskBundle
-) -> tuple[np.ndarray, dict]:
+def _blend_local(before: np.ndarray, adjusted: np.ndarray, target: np.ndarray) -> np.ndarray:
+    if not target.any():
+        return before.copy()
+    distance = cv2.distanceTransform(target.astype(np.uint8), cv2.DIST_L2, 5)[target]
+    alpha = np.minimum(distance / 3, 1.0)[:, None]
+    result = before.copy()
+    result[target] = np.clip(
+        np.rint(before[target] * (1 - alpha) + adjusted[target] * alpha), 0, 255
+    ).astype(np.uint8)
+    return result
+
+
+def prepare_foreground(
+    scene: np.ndarray,
+    candidate: np.ndarray,
+    job: ControlledJob,
+    masks: MaskBundle,
+    estimated_visible: dict[str, np.ndarray] | None = None,
+    estimated_parts: dict[str, np.ndarray] | None = None,
+    *,
+    skip_unreliable_photometry: bool = False,
+) -> tuple[np.ndarray, np.ndarray, list[dict]]:
     if candidate.shape != scene.shape:
         raise ConfigError("候选与原图尺寸不一致，禁止在后处理阶段隐式缩放")
+    if estimated_visible is not None and any(
+        np.any(value & ~masks.objects[oid].arrays["edit"])
+        for oid, value in estimated_visible.items()
+    ):
+        raise ConfigError("候选实体越出编辑范围，必须重新规划或重生，不能用编辑Mask裁掉主体")
     settings = job.data["harmonization"]
     target = masks.arrays["obj_visible"] & masks.arrays["edit"] & ~masks.arrays["protect"]
+    if estimated_visible is not None:
+        observed = np.zeros(scene.shape[:2], bool)
+        for oid, value in estimated_visible.items():
+            if oid in masks.objects:
+                observed |= value & masks.objects[oid].arrays["edit"]
+        target = observed & ~masks.arrays["protect"]
     result, operations = candidate.copy(), []
+    if settings["mode"] == "paired_local":
+        if target.any():
+            try:
+                result, record = paired_local_correction(scene, result, job, masks, target)
+            except ConfigError:
+                if not skip_unreliable_photometry:
+                    raise
+                record = {
+                    "operation": "paired_background_local_linear_RGB",
+                    "status": "SKIPPED_UNRELIABLE_H0",
+                    "reason": "配对样本不足；保留候选，不放宽阈值；阴影漂移校正也将UNKNOWN",
+                }
+            operations.append(record)
+        else:
+            operations.append(
+                {
+                    "operation": "paired_background_local_linear_RGB",
+                    "status": "SKIPPED_NO_RELIABLE_TARGET",
+                }
+            )
     if settings["mode"] == "bounded_lab":
         if not settings.get("comparable_roi_confirmed") or "reference_roi" not in settings:
             raise ConfigError("局部 LAB 匹配需要人工确认的同材质/同照明对照 ROI")
@@ -99,7 +152,7 @@ def harmonize(
         shift = np.clip(requested, -bound, bound) * settings.get("strength", 0.5)
         lab[target] = np.clip(lab[target] + shift, 0, 255)
         converted = cv2.cvtColor(lab.astype(np.uint8), cv2.COLOR_LAB2RGB)
-        result[target] = converted[target]
+        result = _blend_local(result, converted, target)
         operations.append(
             {
                 "operation": "bounded_local_LAB8",
@@ -109,27 +162,97 @@ def harmonize(
                 "claim": "局部统计校正，不代表重新计算物理光照",
             }
         )
+    result, records = adjust_surfaces(
+        result, job, masks, target, estimated_visible, estimated_parts
+    )
+    operations += records
+    result, records = apply_user_appearance_feedback(
+        result, job, masks, target, estimated_visible
+    )
+    operations += records
     sigma = settings.get("blur_sigma_px", 0)
     if sigma and target.any():
-        weights = target.astype(np.float32)
-        numerator = cv2.GaussianBlur(result.astype(np.float32) * weights[..., None], (0, 0), sigma)
-        denominator = cv2.GaussianBlur(weights, (0, 0), sigma)
-        blurred = numerator / np.maximum(denominator[..., None], 1e-6)
-        result[target] = np.clip(np.rint(blurred[target]), 0, 255).astype(np.uint8)
-        operations.append({"operation": "masked_normalized_gaussian", "sigma_px": sigma})
+        for oid, values in masks.objects.items():
+            region = (
+                (
+                    estimated_visible.get(oid, np.zeros(scene.shape[:2], bool))
+                    if estimated_visible is not None
+                    else values.arrays["obj_visible"]
+                )
+                & values.arrays["edit"]
+                & target
+            )
+            if not region.any():
+                continue
+            weights = region.astype(np.float32)
+            numerator = cv2.GaussianBlur(
+                result.astype(np.float32) * weights[..., None], (0, 0), sigma
+            )
+            denominator = cv2.GaussianBlur(weights, (0, 0), sigma)
+            blurred = numerator / np.maximum(denominator[..., None], 1e-6)
+            adjusted = result.copy()
+            adjusted[region] = np.clip(np.rint(blurred[region]), 0, 255).astype(np.uint8)
+            result = _blend_local(result, adjusted, region)
+            operations.append(
+                {
+                    "operation": "masked_normalized_gaussian",
+                    "object_id": oid,
+                    "sigma_px": sigma,
+                    "edge_fade_px": 3,
+                }
+            )
     std = settings.get("noise_std", 0)
     if std and target.any():
         if "noise_seed" not in settings:
             raise ConfigError("加噪必须提供显式 noise_seed 以便审计")
         rng = np.random.default_rng(settings["noise_seed"])
-        result[target] = np.clip(
+        adjusted = result.copy()
+        adjusted[target] = np.clip(
             np.rint(result[target] + rng.normal(0, std, result[target].shape)), 0, 255
         ).astype(np.uint8)
+        result = _blend_local(result, adjusted, target)
         operations.append(
             {"operation": "local_rgb_gaussian_noise", "std": std, "seed": settings["noise_seed"]}
         )
-    if job.data["mode"] in ("B", "C"):
+    return result, target, operations
+
+
+def harmonize(
+    scene: np.ndarray,
+    candidate: np.ndarray,
+    job: ControlledJob,
+    masks: MaskBundle,
+    estimated_visible: dict[str, np.ndarray] | None = None,
+    estimated_parts: dict[str, np.ndarray] | None = None,
+    *,
+    registration: dict | None = None,
+    diagnostics_dir=None,
+) -> tuple[np.ndarray, dict]:
+    if job.data.get("feature_flags", {}).get("v3_layer_compositor"):
+        from fusion_engine.controlled.fusion_v3.renderer import render
+
+        return render(
+            scene,
+            candidate,
+            job,
+            masks,
+            estimated_visible,
+            estimated_parts,
+            registration=registration,
+            diagnostics_dir=diagnostics_dir,
+        )
+    result, target, operations = prepare_foreground(
+        scene, candidate, job, masks, estimated_visible, estimated_parts
+    )
+    settings = job.data["harmonization"]
+    if (
+        job.data["mode"] in ("B", "C")
+        or job.data["constraints"]["background_protection"] == "strict"
+    ):
         alpha = masks.arrays["edit"].astype(np.float32)
+        if estimated_visible is not None:
+            # Contact proposals are not image-copy regions: doing so imported dark rectangles.
+            alpha = target.astype(np.float32)
         radius = settings.get("feather_radius_px", 0)
         if radius:
             distance = cv2.distanceTransform(alpha.astype(np.uint8), cv2.DIST_L2, 5)
@@ -138,6 +261,9 @@ def harmonize(
         result = np.clip(
             np.rint(scene * (1 - alpha[..., None]) + result * alpha[..., None]), 0, 255
         ).astype(np.uint8)
+    if estimated_visible is not None:
+        result, contact_record = render_contact(scene, result, job, masks, estimated_visible)
+        operations.append({"operation": "bounded_receiver_contact_occlusion", **contact_record})
     result[masks.arrays["protect"]] = scene[masks.arrays["protect"]]
     operations.append(
         {
@@ -148,6 +274,10 @@ def harmonize(
     )
     return result, {
         "operations": operations,
+        "render_scope": "estimated_instance_visible_union_contact_within_explicit_edit"
+        if estimated_visible is not None
+        else "planned_edit",
+        "colour_edge_fade_px": 3,
         "global_case_grading_used": False,
         "object_stats": roi_statistics(result, target),
     }
