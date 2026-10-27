@@ -44,14 +44,12 @@ def series_of_image_model(name: str) -> Optional[str]:
         return "qianwen"
     return None
 
-
 def series_of_vlm(name: str) -> Optional[str]:
     if name.startswith("doubao-seed"):
         return "doubao"
     if name.startswith("qwen"):
         return "qianwen"
     return None
-
 
 def handoff_to_series(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
     """同一套参数。生图模型决定系列；没写生图模型时才用 VLM 判断。"""
@@ -76,17 +74,12 @@ def handoff_to_series(args: argparse.Namespace, parser: argparse.ArgumentParser)
     global CHOSEN_IMAGE, CHOSEN_VLM
     CHOSEN_IMAGE, CHOSEN_VLM = image_model, vlm_model
 
+# ============================================================
+# 提示词。改措辞只改这一段，下面的接口和采样不要跟着改。
+# 外观五项、逐件生图、类别生图、模板、尺寸句、位置句。
+# ============================================================
 
-FUSION_SCORE_AXES = (
-    "weathering_score",
-    "lighting_score",
-    "occlusion_score",
-    "style_score",
-    "background_preservation_score",
-    "identity_score",
-)
-QUALITY_THRESHOLD = 85.0
-
+# ---------- 外观五项 ----------
 
 def geometry_identity(profile: dict[str, Any]) -> list[str]:
     colors = r"青绿色|深绿色|深蓝色|紫粉色|银白色|红色|绿色|蓝色|黑色|银色|白色|灰色|黄色|紫色|红黄|红黑|黑蓝"
@@ -96,14 +89,12 @@ def geometry_identity(profile: dict[str, Any]) -> list[str]:
         if not any(token in feature for token in ("字样", "标签文字", "商标"))
     ]
 
-
 def appearance_neutral_name(profile: dict[str, Any]) -> str:
     return re.sub(
         r"^(?:青绿色|深绿色|深蓝色|紫粉色|红色|绿色|蓝色|黑色|银色|白色|灰色|黄色|紫色|红黄|红黑|黑蓝)\s*",
         "",
         profile["name"],
     )
-
 
 WEATHERING = {
     "painted_steel": "明确呈现与当前废钢堆相称的报废钢件：可见钢主体主要为深褐锈、灰褐尘土和旧油泥，原漆仅作约10–20%的暗淡碎片残留；此为合成外观目标，不是实测腐蚀面积。裸钢有不规则锈层、点蚀和接缝积锈，大片剥漆，不保留完整红/蓝/绿大色块或亮漆高光。不能只加几个锈点。锈纹沿材质、磕碰和水路分布，不均匀喷成橙色。塑料旋钮/标牌不生铁锈。",
@@ -119,8 +110,8 @@ WEATHERING = {
     "plastic_pp": "废弃白色PP罐明显积灰、灰褐油污、黄化和擦伤，盖纹及接缝积污，反射变为旧塑料的暗哑漫反射，不能只点几处轻污后仍像白色新品。没有红褐铁锈，不变成金属罐，不无故烧熔或大面积开裂；污损色与附近废料相称。",
 }
 
-
 APPEARANCE_KEYS = ("color_temperature", "tone", "saturation", "pixel", "sharpness")
+
 APPEARANCE_MATCHES = (
     ("color_temperature_match", "色温修正", "describe_color_temperature", "color_temperature"),
     ("tone_match", "色调修正", "describe_tone", "tone"),
@@ -129,11 +120,9 @@ APPEARANCE_MATCHES = (
     ("sharpness_match", "清晰度修正", "describe_sharpness", "sharpness"),
 )
 
-
 def _observed(value: Any, fallback: str) -> str:
     text = str(value or "").strip()
     return text if len(text) >= 2 else fallback
-
 
 def describe_color_temperature(color_temperature: str = "") -> str:
     """色温只写白平衡和冷暖，不写色相。"""
@@ -145,7 +134,6 @@ def describe_color_temperature(color_temperature: str = "") -> str:
         "异物与废钢交界处冷暖连续，不能出现一圈独立色温，异物本身不能单独偏暖或偏冷。"
     )
 
-
 def describe_tone(tone: str = "") -> str:
     """色调只写色相和明度。饱和度是单独一项。"""
     observed = _observed(tone, "铁锈红、深灰、暗褐，明度不高于周围废钢")
@@ -154,7 +142,6 @@ def describe_tone(tone: str = "") -> str:
         "只看色相和明度，跟相邻废钢，不跳纯色，不加更亮的边。"
         "不要在这句里写饱和度，也不要写冷暖。"
     )
-
 
 def describe_saturation(saturation: str = "") -> str:
     """饱和度必须发灰，并且明显低于相邻废钢。"""
@@ -167,7 +154,6 @@ def describe_saturation(saturation: str = "") -> str:
         "商品原色只留一点色相，其余混进灰尘和铁锈灰。"
     )
 
-
 def describe_pixel(pixel: str = "") -> str:
     """像素只写颗粒、压缩和局部对比，不写清不清楚。"""
     observed = _observed(pixel, "颗粒粗、压缩块明显、局部对比低")
@@ -178,7 +164,6 @@ def describe_pixel(pixel: str = "") -> str:
         "和原图像素相同仍然偏高，要再粗一档。"
         "禁止高清贴图、干净边缘和无噪点表面。"
     )
-
 
 def describe_sharpness(sharpness: str = "") -> str:
     """清晰度只写失焦和拖影。不把整张监控图再柔化。"""
@@ -191,11 +176,9 @@ def describe_sharpness(sharpness: str = "") -> str:
         "只改异物，不要把整张监控图再柔化、降分辨率或二次渲染发糊。"
     )
 
-
 def appearance_from_context(context: dict[str, Any] | None) -> dict[str, str]:
     source = context or {}
     return {key: str(source.get(key) or "").strip() for key in APPEARANCE_KEYS}
-
 
 def appearance_prompt_block(appearance: dict[str, str] | None = None) -> str:
     observed = appearance or {}
@@ -207,7 +190,6 @@ def appearance_prompt_block(appearance: dict[str, str] | None = None) -> str:
         f"【清晰度】{describe_sharpness(observed.get('sharpness', ''))}",
     ])
 
-
 def normalize_appearance_match(value: Any) -> str:
     text = str(value or "").strip().lower()
     if text in {"bad", "poor", "差", "不匹配", "不一致", "失败"}:
@@ -216,13 +198,11 @@ def normalize_appearance_match(value: Any) -> str:
         return "good"
     return "ok"
 
-
 def appearance_is_bad(evaluation: dict[str, Any]) -> bool:
     return any(
         normalize_appearance_match(evaluation.get(match_key)) == "bad"
         for match_key, _label, _method, _obs in APPEARANCE_MATCHES
     )
-
 
 def appearance_correction_text(
     evaluation: dict[str, Any], appearance: dict[str, str] | None
@@ -250,6 +230,7 @@ def appearance_correction_text(
         "不要要求柔化整张图，也不要替换禁止鲜红、青蓝、橙色这类原词。"
     )
 
+# ---------- 场景、评审、逐件生图 ----------
 
 def scene_context_prompt(context: dict[str, Any] | None) -> str:
     labels = {
@@ -268,7 +249,6 @@ def scene_context_prompt(context: dict[str, Any] | None) -> str:
     if not parts:
         return "【背景适配】直接观察本张原监控图，按目标附近钢件的明暗、色温、旧化、反射、噪声和锐度重画物品；无法确定光源时不要添加摄影棚高光或新投影方向。"
     return "【背景适配，来源为VLM观察而非物理测量】" + "；".join(parts)
-
 
 def review_requirements() -> str:
     return (
@@ -292,58 +272,6 @@ def review_requirements() -> str:
         "分数必须根据看见的图像给出，不能因提示词写了要求就给高分；模型复核通过仍需人工看图。"
     )
 
-
-def quality_gate(evaluation: dict[str, Any]) -> dict[str, Any]:
-    scores: dict[str, float] = {}
-    reasons = []
-    for key in FUSION_SCORE_AXES:
-        try:
-            score = float(evaluation.get(key, 0))
-            if not math.isfinite(score):
-                score = 0.0
-        except (TypeError, ValueError):
-            score = 0.0
-        score = min(100.0, max(0.0, score))
-        scores[key] = score
-        if score <= QUALITY_THRESHOLD:
-            reasons.append(f"{key}_not_above_85")
-    if evaluation.get("object_present") is not True:
-        reasons.append("object_presence_not_confirmed")
-    for key in (
-        "new_appearance_detected",
-        "pasted_appearance_detected",
-        "material_violation",
-    ):
-        if evaluation.get(key) is not False:
-            reasons.append(key)
-    return {
-        "passed": not reasons,
-        "scores": scores,
-        "minimum_score": min(scores.values()),
-        "reasons": reasons,
-        "evidence_type": "vlm_visual_opinion_not_human_acceptance",
-    }
-
-
-def edit_region(
-    xy: list[float], ratio: float, image_size: tuple[int, int], cross_ratio: float
-) -> list[float]:
-    """Return a normalized interactive edit hint, including support and shadow context."""
-    width, height = image_size
-    box_w = min(0.72, max(0.14, ratio * 1.55 + 0.03))
-    box_h = min(
-        0.60, max(0.16, ratio * (0.60 + min(1.0, cross_ratio)) * width / height)
-    )
-    cx = min(0.96 - box_w / 2, max(0.04 + box_w / 2, float(xy[0])))
-    cy = min(0.84 - box_h / 2, max(0.10 + box_h / 2, float(xy[1])))
-    return [
-        round(cx - box_w / 2, 5),
-        round(cy - box_h / 2, 5),
-        round(cx + box_w / 2, 5),
-        round(cy + box_h / 2, 5),
-    ]
-
-
 def region_prompt(region: list[float] | None) -> str:
     if not region:
         return ""
@@ -354,81 +282,6 @@ def region_prompt(region: list[float] | None) -> str:
         "此框包含物品、接触阴影和少量已有前景钢件，不是物品的外接框；物品可见长度仍按本轮设定比例。"
         "允许在框内重建接触处和遮挡边缘，使原有钢条/钢板自然盖住物品部分轮廓；保持框外场景、时间戳和机位字样。"
     )
-
-def load_catalog(
-    path: str | Path, reference_root: str | Path | None = None
-) -> dict[str, Any]:
-    data = json.loads(Path(path).read_text(encoding="utf-8"))
-    if data.get("schema_version") != "1.0" or not isinstance(data.get("objects"), list):
-        raise ValueError("物品目录格式不符合 1.0 约定")
-    catalog_path = Path(path).resolve()
-    root = Path(reference_root or data["reference_root"]).expanduser()
-    if not root.is_absolute():
-        root = catalog_path.parent.parent / root
-    root = root.resolve()
-    ids, names = set(), set()
-    for profile in data["objects"]:
-        identifier = profile["id"]
-        filename = profile["reference_filename"]
-        if identifier in ids or filename in names:
-            raise ValueError("物品 ID 和参考图文件名必须唯一")
-        ids.add(identifier)
-        names.add(filename)
-        reference = (root / filename).resolve()
-        if not reference.is_relative_to(root) or not reference.is_file():
-            raise ValueError(f"找不到目录中的参考图：{filename}")
-        policy = profile["size_policy"]
-        if policy["reference_length_mm"] <= 0 or policy["cross_mm"] <= 0:
-            raise ValueError(f"{identifier} 的尺寸必须为正")
-        low, high = policy["visible_ratio_range"]
-        if not 0 < low <= high < 1:
-            raise ValueError(f"{identifier} 的可见比例范围无效")
-    data["reference_root"] = str(root)
-    return data
-
-
-def catalog_items(catalog: dict[str, Any]) -> list[dict[str, Any]]:
-    return [
-        {
-            "path": Path(catalog["reference_root"]) / profile["reference_filename"],
-            "class": profile["category"],
-            "weight": profile.get("sampling_weight", 1.0),
-            "filename": profile["reference_filename"],
-            "profile_id": profile["id"],
-            "profile": profile,
-        }
-        for profile in catalog["objects"]
-    ]
-
-
-def select_profile(catalog: dict[str, Any], identifier: str) -> dict[str, Any]:
-    for profile in catalog["objects"]:
-        if identifier in (
-            profile["id"],
-            profile["reference_filename"],
-            profile.get("original_filename"),
-        ):
-            return profile
-    raise ValueError(f"目录中没有该物品：{identifier}")
-
-
-def profile_brief(profile: dict[str, Any]) -> dict[str, Any]:
-    policy = profile["size_policy"]
-    return {
-        "height_cm": policy["reference_length_mm"] / 10,
-        "diameter_cm": policy["cross_mm"] / 10,
-        "cross_name": policy["cross_name"],
-        "expose": profile["exposure_hint"],
-        "forbid": "；".join(profile["forbidden_changes"]),
-        "parts": [
-            {"name": name, "cm": value / 10}
-            for name, value in profile["parts_mm"].items()
-        ],
-        "evidence_status": profile["dimension_evidence"]["status"],
-        "physical_name": profile["name"],
-        "profile_id": profile["id"],
-    }
-
 
 def size_spec(
     profile: dict[str, Any], target_ratio: float | None = None
@@ -477,7 +330,6 @@ def size_spec(
         "background_calibration": "assumed_not_measured",
         "assumed_scene_width_cm": span_cm,
     }
-
 
 def render_prompt(
     profile: dict[str, Any],
@@ -564,7 +416,6 @@ def render_prompt(
         lines.append(region_prompt(edit_region_xyxy))
     return "\n".join(lines)
 
-
 def evaluator_prompt(profile: dict[str, Any]) -> str:
     return (
         f"你评估的对象是 {profile['name']}（{profile['id']}），而非该大类的其他型号。"
@@ -583,7 +434,6 @@ def evaluator_prompt(profile: dict[str, Any]) -> str:
         + review_requirements()
     )
 
-
 def evaluation_user_prompt(
     profile: dict[str, Any], spec: dict[str, Any], history: str
 ) -> str:
@@ -599,645 +449,126 @@ def evaluation_user_prompt(
         + evaluator_prompt(profile)
     )
 
+# ---------- 类别生图与单次角色提示 ----------
 
-per_item_catalog_items = catalog_items
-per_item_evaluation_prompt = evaluation_user_prompt
-per_item_evaluator_prompt = evaluator_prompt
-load_per_item_catalog = load_catalog
-per_item_brief = profile_brief
-render_per_item_prompt = render_prompt
-per_item_size_spec = size_spec
-fusion_quality_gate = quality_gate
-fusion_edit_region = edit_region
-
-# ============ 强制禁用SSL验证 ============
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-requests.packages.urllib3.disable_warnings()
-ssl._create_default_https_context = ssl._create_unverified_context
-os.environ['PYTHONHTTPSVERIFY'] = '0'
-os.environ['REQUESTS_CA_BUNDLE'] = ''
-os.environ['CURL_CA_BUNDLE'] = ''
-
-IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp"}
-
-
-# ============ 自定义SSL适配器 ============
-
-class SSLAdapter(requests.adapters.HTTPAdapter):
-    def init_poolmanager(self, *args, **kwargs):
-        import ssl
-        ctx = ssl.create_default_context()
-        ctx.check_hostname = False
-        ctx.verify_mode = ssl.CERT_NONE
-        kwargs['ssl_context'] = ctx
-        return super().init_poolmanager(*args, **kwargs)
-
-
-def get_session_with_ssl_bypass():
-    session = requests.Session()
-    adapter = SSLAdapter()
-    session.mount('https://', adapter)
-    session.verify = False
-    
-    retry_strategy = urllib3.Retry(
-        total=5,
-        backoff_factor=2,
-        status_forcelist=[429, 500, 502, 503, 504],
-        allowed_methods=["HEAD", "GET", "POST", "PUT", "DELETE", "OPTIONS", "TRACE"]
-    )
-    adapter = requests.adapters.HTTPAdapter(max_retries=retry_strategy)
-    session.mount('http://', adapter)
-    session.mount('https://', adapter)
-    
-    return session
-
-
-# ============ Prompt分析器类 ============
-
-class PromptAnalyzer:
-    def __init__(self, output_dir: Path):
-        self.output_dir = output_dir
-        self.output_dir.mkdir(parents=True, exist_ok=True)
-        
-        self.good_prompts_file = output_dir / "good_prompts.json"
-        self.bad_prompts_file = output_dir / "bad_prompts.json"
-        self.prompt_stats_file = output_dir / "prompt_stats.json"
-        
-        self.good_prompts: List[Dict] = []
-        self.bad_prompts: List[Dict] = []
-        
-        self._load_data()
-    
-    def _load_data(self):
-        if self.good_prompts_file.exists():
-            try:
-                with open(self.good_prompts_file, 'r', encoding='utf-8') as f:
-                    self.good_prompts = json.load(f)
-            except:
-                self.good_prompts = []
-        
-        if self.bad_prompts_file.exists():
-            try:
-                with open(self.bad_prompts_file, 'r', encoding='utf-8') as f:
-                    self.bad_prompts = json.load(f)
-            except:
-                self.bad_prompts = []
-    
-    def add_prompt_record(self, prompt: str, image_id: str, object_class: str, 
-                          size_judgment: str, confidence: float, 
-                          quality_score: float, fusion_quality: str,
-                          round_num: int = 0,
-                          full_prompt: str = "", fusion_passed: Optional[bool] = None):
-        record = {
-            "image_id": image_id,
-            "object_class": object_class,
-            "size_judgment": size_judgment,
-            "confidence": confidence,
-            "quality_score": quality_score,
-            "fusion_quality": fusion_quality,
-            "round_num": round_num,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-            "prompt_text": prompt,
-            "full_prompt": full_prompt if full_prompt else prompt,
-            "prompt_length": len(prompt),
-            "fusion_passed": fusion_passed,
-        }
-        
-        is_good = (
-            size_judgment == "acceptable" and 
-            confidence >= 0.5 and 
-            quality_score >= 0.5
-            and fusion_passed is not False
-        )
-        
-        if is_good:
-            self.good_prompts.append(record)
-            print(f"  [Prompt分析] ✅ 好Prompt已保存 (第{len(self.good_prompts)}个)")
-        else:
-            self.bad_prompts.append(record)
-            print(f"  [Prompt分析] ❌ 差Prompt已保存 (第{len(self.bad_prompts)}个)")
-        
-        self._save_prompts()
-    
-    def _save_prompts(self):
-        with open(self.good_prompts_file, 'w', encoding='utf-8') as f:
-            json.dump(self.good_prompts, f, ensure_ascii=False, indent=2)
-        
-        with open(self.bad_prompts_file, 'w', encoding='utf-8') as f:
-            json.dump(self.bad_prompts, f, ensure_ascii=False, indent=2)
-    
-    def get_stats(self) -> Dict[str, Any]:
-        return {
-            "total_records": len(self.good_prompts) + len(self.bad_prompts),
-            "good_count": len(self.good_prompts),
-            "bad_count": len(self.bad_prompts),
-            "good_prompts_file": str(self.good_prompts_file),
-            "bad_prompts_file": str(self.bad_prompts_file),
-            "last_update": datetime.now(timezone.utc).isoformat()
-        }
-    
-    def save_stats(self):
-        stats = self.get_stats()
-        with open(self.prompt_stats_file, 'w', encoding='utf-8') as f:
-            json.dump(stats, f, ensure_ascii=False, indent=2)
-    
-    def print_summary(self):
-        stats = self.get_stats()
-        print("\n" + "="*60)
-        print("📊 Prompt分析统计")
-        print("="*60)
-        print(f"总记录数: {stats['total_records']}")
-        print(f"好Prompt: {stats['good_count']}")
-        print(f"差Prompt: {stats['bad_count']}")
-        
-        if self.good_prompts:
-            print(f"\n✅ 好的Prompt示例 (最新的3条):")
-            for i, p in enumerate(self.good_prompts[-3:]):
-                print(f"  {i+1}. [{p['object_class']}] {p['prompt_text'][:150]}...")
-        
-        if self.bad_prompts:
-            print(f"\n❌ 差的Prompt示例 (最新的3条):")
-            for i, p in enumerate(self.bad_prompts[-3:]):
-                print(f"  {i+1}. [{p['object_class']}] {p['prompt_text'][:150]}...")
-        print("="*60)
-
-
-# ============ 配置类 ============
-
-@dataclass
-class AppConfig:
-    image_api_key: str = field(repr=False)
-    model: str
-    image_api_url: str
-    image_protocol: str
-    size: str
-    output_format: str
-    watermark: bool
-    max_images: int
-    timeout_seconds: int
-    sleep_seconds: float
-    total_num: int
-    seed: Optional[int]
-    
-    object_resize_scale: float
-    object_resize_scales: Dict[str, Tuple[float, float]]
-    object_size_briefs: Dict[str, Dict[str, Any]]
-    object_canvas_scale: float
-    object_opacity: float
-    object_anchor: str
-    
-    backgrounds_dir: Path
-    objects_dir: Path
-    prompt_templates_path: Path
-    negative_prompt_path: Path
-    output_images_dir: Path
-    output_final_images_dir: Path
-    output_metadata_dir: Path
-    output_failed_dir: Path
-    output_bbox_dir: Path
-    output_analysis_dir: Path
-    
-    vlm_api_key: str = field(repr=False)
-    vlm_api_url: str
-    vlm_model: str
-    enable_vlm_optimization: bool = True
-    max_optimization_rounds: int = 3
-    size_tolerance: str = "class_range"
-    feed_object_views: bool = True
-    max_object_views: int = 3
-    six_views_dir: Optional[Path] = None
-    object_catalog_path: Optional[Path] = None
-    object_catalog: Optional[Dict[str, Any]] = None
-    active_object_profile: Optional[Dict[str, Any]] = None
-    background_catalog: Optional[Dict[str, Any]] = None
-    active_background_profile: Optional[Dict[str, Any]] = None
-    active_scene_context: Optional[Dict[str, Any]] = None
-    active_edit_region: Optional[List[float]] = None
-    active_position_xy: Optional[List[float]] = None
-    use_interactive_edit_region: bool = True
-    vlm_thinking_mode: str = "disabled"
-    prepare_weathered_reference: bool = True
-    active_weathered_reference: Optional[Path] = None
-    active_reference_kind: str = "six_view_atlas"
-    active_reference_preparation: Optional[Dict[str, Any]] = None
-    weathered_reference_rounds: int = 2
-    
-    vlm_evaluator_prompt: str = field(default_factory=lambda: (
-        "你是废钢车斗异物质检员。只输出有效JSON。车斗水平视野约240厘米。\n"
-        "先估计可见最长边占画面宽度的 visible_ratio，再换成厘米：visible_cm = visible_ratio × 240。\n"
-        "尺寸以该类真实厘米为准，包括参照长度、筒径或主横截面，以及握把、喷管、活塞杆、耳环、法兰等结构。\n"
-        "不要把真实厘米再缩小成模型。遮挡可以挡住一部分，但露出部分必须仍是真实尺度。\n"
-        "太大：可见最长边的厘米明显大于真实参照长度，或画得比真实件更大。\n"
-        "太小：没放进去，或露出部分明显小于真实横截面，像缩小的玩具。\n"
-        "合格：露出部分落在真实横截面到真实参照长度之间，结构比例符合真实直径/高度。\n"
-        "看不见全长是埋入，不要因此判太小；能看见也不要因此判太大。\n"
-        "小件如果画得达到更大类别的真实尺寸，判定为太大。\n"
-        "文字只要求模糊异物标签；禁止建议柔化整张图或降低分辨率。\n"
-        "sharpness 只记整图是否发糊（sharp|ok|soft），不要靠缩小异物来修清晰度。\n"
-        "另评五项外观，每项只评自己的内容，取值 bad|ok|good："
-        "color_temperature_match 只看白平衡和冷暖；"
-        "tone_match 只看色相和明度，不看饱和度；"
-        "saturation_match 必须发灰且明显低于废钢，鲜红、橘红、亮黄、翠绿、纯蓝、荧光或与废钢同样鲜艳为 bad；"
-        "pixel_match 只看颗粒、压缩块和局部对比；"
-        "sharpness_match 只看失焦、拖影和边缘软硬，异物更锐为 bad。\n"
-        "tone_fix 只改色相和明度，不要把饱和度写进 tone_fix。\n"
-        "另给三项 0 到 100 的整数分：tone_score 色调，size_score 大小，overall_score 整体效果。\n"
-        "三项都高于 85 才算这轮合格。每项给一句修正：tone_fix、size_fix、overall_fix。\n"
-        "输出JSON：{\"visible_ratio\": 0.0, \"size_judgment\": \"too_large|acceptable|too_small\", "
-        "\"tone_score\": 0, \"size_score\": 0, \"overall_score\": 0, "
-        "\"tone_fix\": \"\", \"size_fix\": \"\", \"overall_fix\": \"\", "
-        "\"color_temperature_match\": \"bad|ok|good\", \"tone_match\": \"bad|ok|good\", "
-        "\"saturation_match\": \"bad|ok|good\", \"pixel_match\": \"bad|ok|good\", "
-        "\"sharpness_match\": \"bad|ok|good\", "
-        "\"sharpness\": \"sharp|ok|soft\", \"confidence\": 0.0, \"reason\": \"\", "
-        "\"improvement_suggestion\": \"\", \"quality_score\": 0.0, "
-        "\"fusion_quality\": \"very bad|bad|ok|good|very good\"}"
-    ))
-
-
-# ============ 尺寸计算工具 ============
-
-# 废钢车斗水平视野约 2.4 m，用于把宽度百分比换成厘米
-HOPPER_FOV_M = 2.4
-
-
-def image_sharpness_score(path: Path) -> float:
-    """Laplacian 方差，数值越高越锐。用于发现后轮二次渲染发糊。"""
-    img = Image.open(path).convert("L")
-    img = img.resize(
-        (max(1, img.width // 4), max(1, img.height // 4)),
-        Image.Resampling.BOX,
-    )
-    edge = img.filter(ImageFilter.Kernel((3, 3), [0, 1, 0, 1, -4, 1, 0, 1, 0], scale=1, offset=0))
-    pix = list(edge.getdata())
-    if not pix:
-        return 0.0
-    mean = sum(pix) / len(pix)
-    return sum((p - mean) ** 2 for p in pix) / len(pix)
-
-
-_WHOLE_IMAGE_BLUR_HINTS = (
-    "柔化整", "整张图模糊", "整图模糊", "降低清晰", "降清晰",
-    "降低分辨率", "降分辨率", "降低锐度", "二次渲染", "把画面弄糊",
-)
-
-
-def sanitize_vlm_suggestion(text: str) -> str:
-    """去掉让整张图发糊的建议，标签文字模糊可以保留。"""
-    if not text:
-        return ""
-    parts = re.split(r"[。；;\n]+", str(text))
-    kept = []
-    for part in parts:
-        piece = part.strip()
-        if not piece:
-            continue
-        if "标签" in piece or "字迹" in piece or "文字" in piece:
-            kept.append(piece)
-            continue
-        if any(hint in piece for hint in _WHOLE_IMAGE_BLUR_HINTS):
-            continue
-        kept.append(piece)
-    return "。".join(kept).strip()
-
-
-
-
-OBJECT_SCALE_ALIASES = {
-    "fire_extinguisher": "灭火器",
-    "gas_cylinder": "气瓶",
-    "hydraulic_cylinder": "液压缸",
-    "shock_absorber": "减震器",
-    "accumulator": "集油器",
-    "sealed_container": "储罐",
-    "filter": "分离过滤器",
-    "jack": "千斤顶",
-    "pesticide_can": "杀虫剂罐",
-    "pneumatic_cylinder": "气缸",
-    "spray_paint_can": "自喷漆罐",
-    "ball_valve": "球阀",
-    "bearing_housing": "轴承座",
-    "sealant_can": "密封胶罐",
-}
-
-
-def parse_object_resize_scales(raw: Dict[str, Any]) -> Dict[str, Tuple[float, float]]:
-    """读取 config.yaml 中每个物体的 [min, max] 或单值，单位为可见最长边/画面宽度。"""
-    fallback = float(raw.get("object_resize_scale", 0.022))
-    parsed: Dict[str, Tuple[float, float]] = {}
-    data = raw.get("object_resize_scales") or {}
-    if not isinstance(data, dict):
-        raise ValueError("object_resize_scales 必须是按物体类别分组的字典")
-    for key, value in data.items():
-        name = str(key).strip()
-        if not name:
-            raise ValueError("object_resize_scales 含有空类别名")
-        if isinstance(value, (int, float)) and not isinstance(value, bool):
-            low = high = float(value)
-        elif isinstance(value, dict):
-            low = float(value.get("min", fallback))
-            high = float(value.get("max", low))
-        elif isinstance(value, (list, tuple)) and len(value) == 2:
-            low, high = float(value[0]), float(value[1])
-        else:
-            raise ValueError(f"物体 {name} 的缩放尺寸格式无效，请使用 [min, max]")
-        if low > high:
-            low, high = high, low
-        if not 0 < low <= high < 1:
-            raise ValueError(f"物体 {name} 的缩放尺寸须满足 0 < min <= max < 1，当前 {low}–{high}")
-        parsed[name] = (low, high)
-    return parsed
-
-
-def actual_scale_range_from_brief(brief: Dict[str, Any]) -> Tuple[float, float]:
-    """真实横截面到真实参照长度，换成占 240 厘米车斗视野的比例。"""
-    fov_cm = HOPPER_FOV_M * 100.0
-    length_cm = float(brief["height_cm"])
-    cross_cm = float(brief["diameter_cm"])
-    if "轴孔" in str(brief.get("cross_name") or "") or "孔径" in str(brief.get("cross_name") or ""):
-        outers = [
-            float(part["cm"]) for part in brief.get("parts") or []
-            if "孔" not in str(part.get("name") or "")
-        ]
-        if outers:
-            ordered = sorted(outers)
-            cross_cm = ordered[len(ordered) // 2]
-    low_cm = min(length_cm, cross_cm)
-    high_cm = max(length_cm, cross_cm)
-    low = max(0.008, low_cm / fov_cm * 0.85)
-    high = min(0.95, high_cm / fov_cm * 1.10)
-    if low > high:
-        low, high = high, low
-    return (low, high)
-
-
-def object_scale_range(cfg: AppConfig, object_class: Optional[str] = None) -> Tuple[float, float]:
-    profile = getattr(cfg, "active_object_profile", None)
-    if profile and profile["category"] == object_class:
-        return tuple(profile["size_policy"]["visible_ratio_range"])
-    fallback = (cfg.object_resize_scale, cfg.object_resize_scale)
-    if not object_class:
-        return fallback
-    brief = lookup_size_brief(cfg, object_class)
-    if brief:
-        return actual_scale_range_from_brief(brief)
-    scales = cfg.object_resize_scales or {}
-    if object_class in scales:
-        return scales[object_class]
-    canonical = OBJECT_SCALE_ALIASES.get(object_class)
-    if canonical and canonical in scales:
-        return scales[canonical]
-    for name, rng in scales.items():
-        if name and (name in object_class or object_class in name):
-            return rng
-    return fallback
-
-
-def sample_object_resize_scale(cfg: AppConfig, object_class: Optional[str] = None) -> float:
-    low, high = object_scale_range(cfg, object_class)
-    return random.uniform(low, high) if high > low else low
-
-
-def parse_object_size_briefs(raw: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
-    """读取每类真实高度、主横截面尺寸和其余结构尺寸。"""
-    data = raw.get("object_size_briefs") or {}
-    if not isinstance(data, dict):
-        raise ValueError("object_size_briefs 必须是按物体类别分组的字典")
-    parsed: Dict[str, Dict[str, Any]] = {}
-    for key, value in data.items():
-        name = str(key).strip()
-        if not name or not isinstance(value, dict):
-            raise ValueError(f"物体 {name or key} 的尺寸说明格式无效")
-        height_cm = float(value.get("height_cm") or 0)
-        diameter_cm = float(value.get("diameter_cm") or 0)
-        if height_cm <= 0 or diameter_cm <= 0:
-            raise ValueError(f"物体 {name} 需要正的 height_cm 和 diameter_cm")
-        parts = []
-        for part in value.get("parts") or []:
-            if not isinstance(part, dict):
-                continue
-            part_name = str(part.get("name") or "").strip()
-            part_cm = float(part.get("cm") or 0)
-            if part_name and part_cm > 0:
-                parts.append({"name": part_name, "cm": part_cm})
-        parsed[name] = {
-            "height_cm": height_cm,
-            "diameter_cm": diameter_cm,
-            "cross_name": str(value.get("cross_name") or "筒径").strip(),
-            "expose": str(value.get("expose") or "").strip(),
-            "forbid": str(value.get("forbid") or "").strip(),
-            "parts": parts,
-        }
-    return parsed
-
-
-def lookup_size_brief(cfg: Optional[AppConfig], object_class: Optional[str]) -> Optional[Dict[str, Any]]:
-    if cfg is None or not object_class:
-        return None
-    profile = getattr(cfg, "active_object_profile", None)
-    if profile and profile["category"] == object_class:
-        return per_item_brief(profile)
-    briefs = cfg.object_size_briefs or {}
-    if object_class in briefs:
-        return briefs[object_class]
-    canonical = OBJECT_SCALE_ALIASES.get(object_class)
-    if canonical and canonical in briefs:
-        return briefs[canonical]
-    for name, brief in briefs.items():
-        if name and (name in object_class or object_class in name):
-            return brief
-    return None
-
-
-def round_size_spec(
-    cfg: Optional[AppConfig],
-    object_class: Optional[str],
-    target_ratio: Optional[float] = None,
-) -> Dict[str, Any]:
-    """返回当前物品工作尺寸和本轮可见占比，兼容旧类别配置。"""
-    profile = getattr(cfg, "active_object_profile", None) if cfg is not None else None
-    if profile and profile["category"] == object_class:
-        return per_item_size_spec(profile, target_ratio)
-    name = object_class or "异物"
-    low, high = object_scale_range(cfg, object_class) if cfg is not None else (0.06, 0.06)
-    ratio = target_ratio if target_ratio is not None else (low + high) / 2
-    ratio = min(max(float(ratio), low * 0.85), high * 1.05)
-    target_cm = ratio * HOPPER_FOV_M * 100.0
-    fov_cm = HOPPER_FOV_M * 100.0
-    brief = lookup_size_brief(cfg, object_class)
-    if brief is None:
-        text = (
-            f"【本轮设定尺寸】{name}按真实物体绘制，不要画成玩具。"
-            f"本轮埋入后可见最长边约{target_cm:.0f}厘米，约占画面宽度的{ratio:.1%}。"
-            f"车斗水平视野约{fov_cm:.0f}厘米。"
-        )
-        return {
-            "object_class": name,
-            "target_ratio": ratio,
-            "target_cm": target_cm,
-            "diameter_cm": None,
-            "diameter_to_height": None,
-            "cross_name": "筒径",
-            "scale_min": low,
-            "scale_max": high,
-            "size_brief": text,
-            "real_height_cm": None,
-        }
-    real_h = brief["height_cm"]
-    real_d = brief["diameter_cm"]
-    d_to_h = real_d / real_h
-    part_bits = [f"{part['name']}{part['cm']:.0f}厘米" for part in brief["parts"]]
-    parts_text = ("，" + "，".join(part_bits)) if part_bits else ""
-    expose = brief["expose"] or "可以埋入废钢，只露出一段"
-    forbid = brief["forbid"] or "不要画得比真实件更大，也不要缩成玩具"
-    text = (
-        f"【本轮设定尺寸】{name}按真实件尺寸绘制，不要把筒径和结构缩成模型。"
-        f"参照长度{real_h:.0f}厘米，{brief['cross_name']}{real_d:.0f}厘米，直径/高度={d_to_h:.2f}"
-        f"{parts_text}。"
-        f"车斗水平视野约{fov_cm:.0f}厘米。"
-        f"本轮埋入后可见最长边约{target_cm:.0f}厘米，约占画面宽度的{ratio:.1%}。"
-        f"筒径和其余结构保持上面的真实厘米，不要按可见边再缩小。"
-        f"{expose}。{forbid}。可见最长边不要明显超过参照长度{real_h:.0f}厘米。"
-    )
-    return {
-        "object_class": name,
-        "target_ratio": ratio,
-        "target_cm": target_cm,
-        "diameter_cm": real_d,
-        "diameter_to_height": d_to_h,
-        "cross_name": brief["cross_name"],
-        "scale_min": low,
-        "scale_max": high,
-        "size_brief": text,
-        "real_height_cm": real_h,
-        "real_diameter_cm": real_d,
-        "parts": [{"name": part["name"], "cm": part["cm"]} for part in brief["parts"]],
-        "expose": expose,
-        "forbid": forbid,
-    }
-
-
-def class_size_clause(
-    cfg: Optional[AppConfig],
-    object_class: Optional[str] = None,
-    target_ratio: Optional[float] = None,
-) -> str:
-    return round_size_spec(cfg, object_class, target_ratio)["size_brief"]
-
-
-_HISTORY_WORDS = ("上一轮", "测得", "历程", "返回尺寸", "前几轮", "前两轮", "第1轮", "第2轮", "第3轮")
-
-
-def keep_only_current_size(text: str, spec: Dict[str, Any]) -> str:
-    """生图提示词只留本轮设定。删掉往轮设定和返回尺寸。"""
-    current_pct = f"{spec['target_ratio']:.1%}"
-    pieces = re.split(r"(?<=[。！？\n])", text or "")
-    kept = []
-    for piece in pieces:
-        if any(word in piece for word in _HISTORY_WORDS):
-            continue
-        percents = re.findall(r"\d+(?:\.\d+)?%", piece)
-        if any(item != current_pct for item in percents):
-            continue
-        kept.append(piece)
-    body = "".join(kept).strip()
-    brief = spec["size_brief"]
-    if brief not in body:
-        body = f"{body}\n{brief}".strip() if body else brief
-    return body
-
-
-def format_size_history(size_rounds: List[Dict[str, Any]]) -> str:
-    """只给 VLM。每一轮的设定尺寸和返回尺寸。"""
-    if not size_rounds:
-        return "【尺寸历程】尚无已完成轮次。"
-    lines = ["【尺寸历程】"]
-    for item in size_rounds:
-        set_pct = item.get("target_ratio")
-        set_cm = item.get("target_cm")
-        cross = item.get("cross_name") or "筒径"
-        diameter = item.get("diameter_cm")
-        visible = item.get("visible_ratio")
-        visible_cm = item.get("visible_cm")
-        judgment = item.get("size_judgment") or "未知"
-        set_txt = f"{set_pct:.1%}（约{set_cm:.0f}厘米）" if isinstance(set_pct, float) else "未知"
-        dia_txt = f"，{cross}约{diameter:.1f}厘米" if isinstance(diameter, float) else ""
-        if isinstance(visible, float):
-            back_cm = f"，约{visible_cm:.0f}厘米" if isinstance(visible_cm, float) else ""
-            back_txt = f"返回可见最长边{visible:.1%}{back_cm}"
-        else:
-            back_txt = "返回尺寸未知"
-        lines.append(
-            f"第{item.get('round')}轮设定可见最长边{set_txt}{dia_txt}；{back_txt}；判定{judgment}。"
-        )
-    return "\n".join(lines)
-
-
-def compute_next_target_ratio(spec: Dict[str, Any], evaluation: Dict[str, Any]) -> float:
-    """按本轮设定和画面返回的可见比例计算下一轮设定。径高比不变，筒径随可见边同比变化。"""
-    current = float(spec["target_ratio"])
-    low = float(spec["scale_min"])
-    high = float(spec["scale_max"])
-    judgment = evaluation.get("size_judgment")
-    measured = evaluation.get("visible_ratio")
-    measured_f = float(measured) if isinstance(measured, (int, float)) and measured is not None else None
-    if judgment == "too_large" and measured_f and measured_f > current > 0:
-        nxt = current * (current / measured_f)
-        return min(max(nxt, low * 0.88), current)
-    if judgment == "too_small":
-        if measured_f and measured_f > 0:
-            nxt = min(high, max(current * 1.2, measured_f * 1.35))
-        else:
-            nxt = min(high * 1.12, current * 1.25)
-        return min(high * 1.12, max(nxt, current))
-    if judgment == "too_large":
-        return max(low * 0.88, current * 0.75)
-    return min(max(current, low), high)
-
-
-def calculate_optimal_size(
-    background_path: Path,
-    object_class: Optional[str] = None,
+def build_prompt(
+    object_class: str,
+    prompt: str,
+    negative_prompt: str,
+    object_path: Path = None,
+    background_path: Path = None,
+    position_hint: str = None,
+    orientation_hint: str = None,
     cfg: Optional[AppConfig] = None,
     target_ratio: Optional[float] = None,
-) -> Dict[str, Any]:
-    bg_img = Image.open(background_path)
-    bg_w, bg_h = bg_img.size
-    scale_min, scale_max = (
-        object_scale_range(cfg, object_class) if cfg is not None
-        else (0.016, 0.034)
-    )
-    if target_ratio is None:
-        target_ratio = (
-            sample_object_resize_scale(cfg, object_class) if cfg is not None
-            else random.uniform(scale_min, scale_max)
-        )
-    target_ratio = min(max(target_ratio, scale_min * 0.8), scale_max * 1.15)
-    target_width = max(16, int(round(bg_w * target_ratio)))
-    target_height = max(16, int(round(bg_h * target_ratio)))
-    result = {
-        "bg_size": (bg_w, bg_h),
-        "target_width": target_width,
-        "target_height": target_height,
-        "target_ratio": target_ratio,
-        "scale_min": scale_min,
-        "scale_max": scale_max,
-        "object_class": object_class,
-        "description": (
-            f"{object_class or '异物'}可见最长边约占画面宽度的{target_ratio*100:.1f}%"
-            f"（约{target_ratio * HOPPER_FOV_M * 100:.0f}厘米，配置 {scale_min*100:.1f}–{scale_max*100:.1f}%）"
-        ),
-    }
+) -> str:
     profile = getattr(cfg, "active_object_profile", None) if cfg is not None else None
-    if profile:
-        result["profile_id"] = profile["id"]
-        result["dimension_evidence"] = profile["dimension_evidence"]
-        result["description"] = (
-            f"{profile['id']} {profile['name']}主体可见最长边目标{target_ratio:.2%}；"
-            f"允许{scale_min:.2%}–{scale_max:.2%}；背景尺度尚未标定，厘米为工作假设。"
+    if profile and profile["category"] == object_class:
+        return render_per_item_prompt(
+            profile, target_ratio=target_ratio, position_hint=position_hint,
+            orientation_hint=orientation_hint, feedback=prompt or "",
+            scene_context=getattr(cfg, "active_scene_context", None),
+            edit_region_xyxy=getattr(cfg, "active_edit_region", None),
+            reference_kind=getattr(cfg, "active_reference_kind", "six_view_atlas"),
         )
-    return result
+    if "【本轮设定尺寸】" in (prompt or ""):
+        size_info = "尺寸只按提示词里的【本轮设定尺寸】绘制：结构用真实厘米，可见最长边用本轮厘米，不要把筒径再缩小，不要参考更早轮次"
+    elif background_path:
+        try:
+            size_info = class_size_clause(cfg, object_class, target_ratio)
+        except Exception:
+            size_info = f"{object_class}必须按真实物体大小出现，不要画成玩具或占据整幅画面"
+    else:
+        size_info = f"{object_class}必须按真实物体大小出现，不要画成玩具或占据整幅画面"
+    
+    enhancer = PromptEnhancer()
+    weathering = random.choice(enhancer.get_weathering_descriptions(object_class))
+    scenario = random.choice(enhancer.get_scenario_descriptions())
+    
+    fusion_enhance = (
+        "【精确尺寸控制】\n"
+        f"1. {size_info}\n"
+        "2. 筒径、握把、喷管、活塞杆、耳环、法兰使用真实厘米，不要按可见边同比缩成模型\n"
+        "3. 可见最长边对应该件在240厘米车斗视野中的真实尺度；没放进去时按同一真实尺寸放入\n"
+        "\n【形状严格保持】\n"
+        f"4. 必须严格保持{object_class}原本的形状、结构、比例和轮廓特征\n"
+        "5. 不允许任何形式的变形、拉伸、扭曲或比例改变\n"
+        "6. 圆形必须保持圆形，圆柱形保持圆柱形，方形保持方形\n"
+        "\n【嵌入与遮挡】\n"
+        "7. 异物必须被废钢挤压包裹，从废钢缝隙中露出能辨认的一段，像被自然埋在里面\n"
+        "8. 异物的边缘必须被废钢遮挡，有明显的遮挡和交错，大部分被挡住，但仍须露出能辨认的一小段\n"
+        "9. 异物表面的锈迹、油污、灰尘纹理必须与周围废钢完全一致\n"
+        "\n【色彩与光影融合】\n"
+        "10. 下面五项分开写，禁止混成一句颜色或一句清晰度：\n"
+        f"{appearance_prompt_block(appearance_from_context(getattr(cfg, 'active_scene_context', None)))}\n"
+        "11. 异物的光影必须与背景图片的光照方向完全一致\n"
+        "12. 异物的材质感必须与废钢一致，不能是亮面或光滑的\n"
+        "\n【风格与质感】\n"
+        "13. 禁止生成干净、崭新、反光强烈的物体\n"
+        "14. 废钢的锈蚀纹理必须覆盖在异物表面\n"
+        f"15. {weathering}\n"
+        f"16. 整体场景：{scenario}\n"
+        "17. 废钢场景、时间戳和摄像头文字保持原样，但必须在指定位置新增异物，输出不能与背景图相同\n"
+        "18. 整张监控图禁止柔化、涂抹、降分辨率或二次渲染发糊。异物自己的色温、色调、饱和度、像素和清晰度按上面五项贴齐相邻废钢，不能比废钢更锐、更干净、更鲜艳\n"
+        "19. 每一轮都只在原始监控背景上重画，不要把任何已生成图当作画布\n"
+        "\n【多视图只作参考】\n"
+        f"20. 第1张图是废钢监控原图，只作为画布；第2张及之后是{object_class}的多视角参考\n"
+        "21. 参考图只用来认外形、零件和直径/高度，不要照抄参考图的鲜艳原色，颜色必须改成发灰、褪色、蒙尘；不要把参考图里的物体直接插入场景\n"
+        "22. 禁止抠图、贴图、叠加、原样拷贝；禁止留下白底、摄影棚、宫格线或前/后/左/右/上/下标签\n"
+        "23. 必须按本轮真实厘米在废钢堆里重新画出被埋住的同类异物，光影锈蚀与车斗一致\n"
+    )
+    if position_hint:
+        fusion_enhance += f"\n【出现位置】异物必须出现在{position_hint}。\n"
+    if orientation_hint:
+        fusion_enhance += f"\n【横放朝向】{orientation_hint}。\n"
 
+    position_head = f"【强制位置】把异物放在{position_hint}。\n\n" if position_hint else ""
+    orientation_head = f"【强制朝向】{orientation_hint}。\n\n" if orientation_hint else ""
+    full_prompt = (
+        f"{position_head}"
+        f"{orientation_head}"
+        f"{prompt}\n\n"
+        f"{fusion_enhance}\n"
+        f"目标异物类别：{object_class}。\n"
+        "不要改变废钢场景、时间戳和摄像头点位文字，不要改变视角，"
+        "不要生成卡通风格，不要生成干净崭新或悬浮的异物，不要偏离该类别的真实尺寸。\n"
+        f"【必须放入】必须把{object_class}放进第1张背景图的指定位置。"
+        "可以小、大部分被遮挡，但必须露出能辨认的一小段。"
+        "禁止省略异物，禁止输出一张与背景图相同的图。"
+        f"多视图里的{object_class}只是外形样本，禁止把它直接插入第1张场景。"
+    )
+    return full_prompt
+
+def generation_role_prompt(prompt: str, view_count: int = 0, references_weathered: bool = False, reference_kind: str = "six_view_atlas") -> str:
+    """单次调用的文字：只把原始背景当画布；多视图只认外形，禁止当贴图。"""
+    lines = [
+        "第1张图是最初的废钢监控原图，只作为画布。必须在这张图上新增异物。",
+        "废钢场景、时间戳和摄像头文字保持原样，但输出不能与这张背景图相同。",
+        "色温：异物的高光、中间调、阴影与相邻废钢同一白平衡，高光不另加暖黄，阴影不另加青蓝，交界不能有一圈独立色温。",
+        "色调：只看色相和明度，跟相邻废钢，不跳纯色，不加更亮的边。不要在这句里写饱和度。",
+        "饱和度：必须发灰、发浊、蒙尘、褪色，并且明显低于周围废钢。宁可几乎看不出原来的颜色，也不要鲜艳。禁止鲜红、橘红、亮黄、翠绿、纯蓝、荧光色和高饱和色块。商品原色只留一点色相，其余混进灰尘和铁锈灰。",
+        "像素：异物细节必须低于监控原图，颗粒更粗，压缩块更明显，局部对比更低；和原图一样细仍然偏高。",
+        "清晰度：先沿用背景的拍摄晃动。废钢边缘若沿同一方向拉出拖影，异物必须同样拉糊；没有拖影时保持同样失焦。异物不能比废钢更锐。禁止把整张监控图再柔化。",
+        "每一轮都只在这张原始背景上重画，不要使用任何已生成图当作画布。",
+    ]
+    if view_count > 0:
+        lines.extend(
+            [
+                (
+                    f"后面 {view_count} 张是用户提供的生锈六视图，参考几何、零件及既有锈蚀；六格为同一件的六个视角，输出只增加一件。按第1张背景重建光照和接触遮挡，保留旧化，不复制白底或格线。"
+                    if reference_kind == "weathered_six_view_atlas" else
+                    f"后面 {view_count} 张是已生成的废旧状态物品身份参考，只参考几何、零件和旧化材质；必须在第1张原背景内重新画出同一件。"
+                    if references_weathered else
+                    f"后面 {view_count} 张只用来认形状、零件和比例；图中是新品参考，输出必须重新生成已明显旧化的报废状态。不要照抄参考图的鲜艳原色。"
+                ),
+                "多视图只用来认形状、零件和比例，不要照抄参考图的鲜艳原色。不得继承参考图的鲜亮漆面、干净金属面、摄影棚高光、独立白平衡、锐度和标签清晰度；当前监控背景决定外观。",
+                "禁止把参考图里的物体直接抠图、贴图、插入、叠加或原样拷贝进第1张场景。",
+                "禁止保留白底、摄影棚、宫格分割线，以及前、后、左、右、上、下这类视角标签。",
+                "必须按本轮设定尺寸，在废钢堆里重新画出一件被埋住的同类异物，光影和锈蚀跟车斗一致。",
+            ]
+        )
+    lines.append(prompt)
+    return "\n".join(lines)
 
 # ============ Prompt增强工具 ============
 
@@ -1376,15 +707,896 @@ class PromptEnhancer:
             "隐藏在", "埋在", "藏在", "陷在", "挤在"
         ]
 
+# ---------- 类别模板与反向提示词 ----------
+
+def ensure_file(path: Path, default_text: str) -> None:
+    if not path.exists():
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(default_text, encoding="utf-8")
+
+def load_prompt_templates(path: Path) -> Dict[str, List[str]]:
+    DEFAULT_PROMPT_TEMPLATES = {
+        "fire_extinguisher": [
+            "在废钢堆的缝隙中嵌入一个真实大小的红色灭火器，被废钢遮挡只露一小部分，表面有灰尘划痕锈迹。",
+            "在废钢堆深处放入一个真实大小的灭火器，被遮挡不显眼，保持灭火器的典型形状，表面旧化带锈。",
+            "将一个小型灭火器塞入废钢件的夹缝中，瓶体大部分被遮挡，表面有褪色和锈迹。",
+        ],
+        "gas_cylinder": [
+            "在废钢背景中嵌入一个真实大小的气瓶，被废钢遮挡只露一小部分，保持气瓶的圆柱形和两端特征，表面有锈迹磨损。",
+            "在废钢堆深处放入一个真实大小的气瓶，被遮挡不显眼，保持气瓶的原本形态，表面旧化带锈。",
+            "将一个小气瓶卡在废钢堆的角落里，被周围的废钢件遮挡，表面有腐蚀痕迹。",
+        ],
+        "shell": [
+            "在废钢背景中嵌入一个真实大小的炮弹，被废钢遮挡只露一小部分，保持炮弹的流线型弹头特征，表面有铁锈泥土。",
+            "在废钢堆深处放入一个真实大小的炮弹，被遮挡不显眼，保持炮弹的典型外观，表面旧化带锈。",
+            "将一枚小炮弹塞入废钢缝隙中，弹体被废钢覆盖，只露出尾部，表面布满锈迹。",
+        ],
+        "lpg_tank": [
+            "在废钢背景中嵌入一个真实大小的液化气罐，被废钢遮挡只露一小部分，保持液化气罐的罐体形状和阀门结构，表面有凹坑锈迹。",
+            "在废钢堆深处放入一个真实大小的液化气罐，被遮挡不显眼，保持液化气罐的形态，表面旧化带锈。",
+            "将一个小液化气罐横放在废钢堆中，大部分被废钢覆盖，表面有严重锈蚀。",
+        ],
+        "accumulator": [
+            "在废钢背景中嵌入一个真实大小的蓄能器，被废钢遮挡只露一小部分，保持蓄能器的圆柱形和端部结构，表面有油泥灰尘。",
+            "在废钢堆深处放入一个真实大小的蓄能器，被遮挡不显眼，保持蓄能器的原本形态，表面旧化带锈。",
+            "将一个小蓄能器嵌入废钢堆的中间层，被周围的废钢件包裹，表面有油污。",
+        ],
+        "hydraulic_cylinder": [
+            "在废钢背景中嵌入一个真实大小的液压缸，被废钢遮挡只露一小部分，保持液压缸的圆柱形和活塞杆特征，表面有油泥划痕。",
+            "在废钢堆深处放入一个真实大小的液压缸，被遮挡不显眼，保持液压缸的典型形状，表面旧化带锈。",
+            "将一个报废的小液压缸塞入废钢缝隙中，缸体被废钢覆盖，活塞杆露出微小部分，表面有油渍。",
+        ],
+        "shock_absorber": [
+            "在废钢背景中嵌入一个真实大小的减震器，被废钢遮挡只露一小部分，保持减震器的圆柱形和连接结构，表面有锈蚀油渍。",
+            "在废钢堆深处放入一个真实大小的减震器，被遮挡不显眼，保持减震器的形态，表面旧化带锈。",
+            "将一个小减震器卡在废钢件的夹缝中，大部分被遮挡，表面有磨损和锈迹。",
+        ],
+        "sealed_container": [
+            "在废钢背景中嵌入一个真实大小的密闭箱体，被废钢遮挡只露一小部分，保持箱体的方形结构和棱边特征，表面有泥土锈迹。",
+            "在废钢堆深处放入一个真实大小的密闭箱体，被遮挡不显眼，保持箱体的原本形状，表面旧化带锈。",
+        ],
+        "tire": [
+            "在废钢背景中嵌入一个真实大小的轮胎，被废钢遮挡只露一小部分，保持轮胎的圆形和胎纹特征，表面有油污磨损。",
+            "在废钢堆深处放入一个真实大小的轮胎，被遮挡不显眼，保持轮胎的典型形态，表面旧化带泥。",
+            "将一个小轮胎嵌入废钢堆中，被周围的废钢挤压，只露出部分胎面，表面有磨损痕迹。",
+        ],
+        "roller": [
+            "在废钢背景中嵌入一个真实大小的滚筒，被废钢遮挡只露一小部分，保持滚筒的圆柱形和表面特征，表面有铁锈油泥。",
+            "在废钢堆深处放入一个真实大小的滚筒，被遮挡不显眼，保持滚筒的原本形状，表面旧化带锈。",
+        ],
+        "wire_rope_drum": [
+            "在废钢背景中嵌入一个真实大小的钢丝绳卷筒，被废钢遮挡只露一小部分，保持卷筒的圆柱形和法兰结构，表面有锈蚀。",
+            "在废钢堆深处放入一个真实大小的钢丝绳卷筒，被遮挡不显眼，保持卷筒的形态，表面旧化带锈。",
+            "将一个小钢丝绳卷筒塞入废钢堆的缝隙中，被废钢覆盖，表面缠绕着断裂的钢丝，锈迹斑斑。",
+        ],
+        "axle": [
+            "在废钢背景中嵌入一个真实大小的汽车后桥，被废钢遮挡只露一小部分，保持后桥的轴形和端部结构，表面有油污锈迹。",
+            "在废钢堆深处放入一个真实大小的汽车后桥，被遮挡不显眼，保持后桥的典型形状，表面旧化带锈。",
+            "将一个小型后桥轴嵌入废钢堆中，被废钢件压住，只露出轴端，表面有油污和锈蚀。",
+        ],
+        "reducer": [
+            "在废钢背景中嵌入一个真实大小的减速机，被废钢遮挡只露一小部分，保持减速机的箱体形状和连接轴，表面有灰尘油污。",
+            "在废钢堆深处放入一个真实大小的减速机，被遮挡不显眼，保持减速机的形态，表面旧化带锈。",
+        ],
+        "track_roller": [
+            "在废钢背景中嵌入一个真实大小的支重轮，被废钢遮挡只露一小部分，保持支重轮的圆形和轮缘特征，表面有铁锈泥土。",
+            "在废钢堆深处放入一个真实大小的支重轮，被遮挡不显眼，保持支重轮的原本形状，表面旧化带锈。",
+        ],
+        "drive_sprocket": [
+            "在废钢背景中嵌入一个真实大小的驱动轮，被废钢遮挡只露一小部分，保持驱动轮的圆形和齿形特征，表面有锈迹磨损。",
+            "在废钢堆深处放入一个真实大小的驱动轮，被遮挡不显眼，保持驱动轮的典型形态，表面旧化带锈。",
+        ],
+        "wheel_end": [
+            "在废钢背景中嵌入一个真实大小的轮边总成，被废钢遮挡只露一小部分，保持轮边总成的盘形和结构特征，表面有油泥灰尘。",
+            "在废钢堆深处放入一个真实大小的轮边总成，被遮挡不显眼，保持轮边总成的形态，表面旧化带锈。",
+        ],
+        "guard_block": [
+            "在废钢背景中嵌入一个真实大小的防护墩，被废钢遮挡只露一小部分，保持防护墩的方形和棱角特征，表面有破损泥土。",
+            "在废钢堆深处放入一个真实大小的防护墩，被遮挡不显眼，保持防护墩的原本形状，表面旧化带泥。",
+        ],
+    }
+    ensure_file(path, json.dumps(DEFAULT_PROMPT_TEMPLATES, ensure_ascii=False, indent=2))
+    return json.loads(path.read_text(encoding="utf-8"))
+
+def load_negative_prompt(path: Path) -> str:
+    DEFAULT_NEGATIVE_PROMPT = (
+        "不要改变原始背景，不要生成卡通风格，不要生成干净崭新的异物，"
+        "不要让异物悬浮，不要把异物画成玩具或缩得比真实厘米更小，不要画得比真实参照长度更大，"
+        "不要改变异物的基本形状和结构特征，必须保持物体原本的形态，"
+        "禁止生成反光强烈、亮面、光滑的物体，纹理必须与废钢一致，"
+        "异物必须被废钢遮挡大部分，但仍露出能辨认的一段。"
+        "禁止对异物进行任何形式的变形、拉伸、扭曲或比例改变。"
+        "不要生成看起来像是人工放置的物体，应该看起来像是自然存在于废钢堆中。"
+        "不要放在很显眼的地方，不要让异物成为画面的视觉焦点，必须与背景完美融合。"
+        "不要柔化整张图，不要降低整张图的分辨率，不要二次渲染导致发糊。"
+        "饱和度必须发灰、发浊、褪色，并且明显低于周围废钢。禁止鲜红、橘红、亮黄、翠绿、纯蓝、荧光色。"
+        "异物不能比废钢更锐，也不能比监控原图的颗粒更细。"
+    )
+    ensure_file(path, DEFAULT_NEGATIVE_PROMPT)
+    return path.read_text(encoding="utf-8").strip()
+
+# ---------- 尺寸句、位置句、评审建议清洗 ----------
+
+def round_size_spec(
+    cfg: Optional[AppConfig],
+    object_class: Optional[str],
+    target_ratio: Optional[float] = None,
+) -> Dict[str, Any]:
+    """返回当前物品工作尺寸和本轮可见占比，兼容旧类别配置。"""
+    profile = getattr(cfg, "active_object_profile", None) if cfg is not None else None
+    if profile and profile["category"] == object_class:
+        return per_item_size_spec(profile, target_ratio)
+    name = object_class or "异物"
+    low, high = object_scale_range(cfg, object_class) if cfg is not None else (0.06, 0.06)
+    ratio = target_ratio if target_ratio is not None else (low + high) / 2
+    ratio = min(max(float(ratio), low * 0.85), high * 1.05)
+    target_cm = ratio * HOPPER_FOV_M * 100.0
+    fov_cm = HOPPER_FOV_M * 100.0
+    brief = lookup_size_brief(cfg, object_class)
+    if brief is None:
+        text = (
+            f"【本轮设定尺寸】{name}按真实物体绘制，不要画成玩具。"
+            f"本轮埋入后可见最长边约{target_cm:.0f}厘米，约占画面宽度的{ratio:.1%}。"
+            f"车斗水平视野约{fov_cm:.0f}厘米。"
+        )
+        return {
+            "object_class": name,
+            "target_ratio": ratio,
+            "target_cm": target_cm,
+            "diameter_cm": None,
+            "diameter_to_height": None,
+            "cross_name": "筒径",
+            "scale_min": low,
+            "scale_max": high,
+            "size_brief": text,
+            "real_height_cm": None,
+        }
+    real_h = brief["height_cm"]
+    real_d = brief["diameter_cm"]
+    d_to_h = real_d / real_h
+    part_bits = [f"{part['name']}{part['cm']:.0f}厘米" for part in brief["parts"]]
+    parts_text = ("，" + "，".join(part_bits)) if part_bits else ""
+    expose = brief["expose"] or "可以埋入废钢，只露出一段"
+    forbid = brief["forbid"] or "不要画得比真实件更大，也不要缩成玩具"
+    text = (
+        f"【本轮设定尺寸】{name}按真实件尺寸绘制，不要把筒径和结构缩成模型。"
+        f"参照长度{real_h:.0f}厘米，{brief['cross_name']}{real_d:.0f}厘米，直径/高度={d_to_h:.2f}"
+        f"{parts_text}。"
+        f"车斗水平视野约{fov_cm:.0f}厘米。"
+        f"本轮埋入后可见最长边约{target_cm:.0f}厘米，约占画面宽度的{ratio:.1%}。"
+        f"筒径和其余结构保持上面的真实厘米，不要按可见边再缩小。"
+        f"{expose}。{forbid}。可见最长边不要明显超过参照长度{real_h:.0f}厘米。"
+    )
+    return {
+        "object_class": name,
+        "target_ratio": ratio,
+        "target_cm": target_cm,
+        "diameter_cm": real_d,
+        "diameter_to_height": d_to_h,
+        "cross_name": brief["cross_name"],
+        "scale_min": low,
+        "scale_max": high,
+        "size_brief": text,
+        "real_height_cm": real_h,
+        "real_diameter_cm": real_d,
+        "parts": [{"name": part["name"], "cm": part["cm"]} for part in brief["parts"]],
+        "expose": expose,
+        "forbid": forbid,
+    }
+
+def class_size_clause(
+    cfg: Optional[AppConfig],
+    object_class: Optional[str] = None,
+    target_ratio: Optional[float] = None,
+) -> str:
+    return round_size_spec(cfg, object_class, target_ratio)["size_brief"]
+
+_HISTORY_WORDS = ("上一轮", "测得", "历程", "返回尺寸", "前几轮", "前两轮", "第1轮", "第2轮", "第3轮")
+
+def keep_only_current_size(text: str, spec: Dict[str, Any]) -> str:
+    """生图提示词只留本轮设定。删掉往轮设定和返回尺寸。"""
+    current_pct = f"{spec['target_ratio']:.1%}"
+    pieces = re.split(r"(?<=[。！？\n])", text or "")
+    kept = []
+    for piece in pieces:
+        if any(word in piece for word in _HISTORY_WORDS):
+            continue
+        percents = re.findall(r"\d+(?:\.\d+)?%", piece)
+        if any(item != current_pct for item in percents):
+            continue
+        kept.append(piece)
+    body = "".join(kept).strip()
+    brief = spec["size_brief"]
+    if brief not in body:
+        body = f"{body}\n{brief}".strip() if body else brief
+    return body
+
+def format_size_history(size_rounds: List[Dict[str, Any]]) -> str:
+    """只给 VLM。每一轮的设定尺寸和返回尺寸。"""
+    if not size_rounds:
+        return "【尺寸历程】尚无已完成轮次。"
+    lines = ["【尺寸历程】"]
+    for item in size_rounds:
+        set_pct = item.get("target_ratio")
+        set_cm = item.get("target_cm")
+        cross = item.get("cross_name") or "筒径"
+        diameter = item.get("diameter_cm")
+        visible = item.get("visible_ratio")
+        visible_cm = item.get("visible_cm")
+        judgment = item.get("size_judgment") or "未知"
+        set_txt = f"{set_pct:.1%}（约{set_cm:.0f}厘米）" if isinstance(set_pct, float) else "未知"
+        dia_txt = f"，{cross}约{diameter:.1f}厘米" if isinstance(diameter, float) else ""
+        if isinstance(visible, float):
+            back_cm = f"，约{visible_cm:.0f}厘米" if isinstance(visible_cm, float) else ""
+            back_txt = f"返回可见最长边{visible:.1%}{back_cm}"
+        else:
+            back_txt = "返回尺寸未知"
+        lines.append(
+            f"第{item.get('round')}轮设定可见最长边{set_txt}{dia_txt}；{back_txt}；判定{judgment}。"
+        )
+    return "\n".join(lines)
+
+def describe_sampled_position(
+    xy: Tuple[float, float],
+    center: Tuple[float, float],
+) -> str:
+    x, y = xy
+    dx, dy = x - center[0], y - center[1]
+    horizontal = "右侧" if dx >= 0 else "左侧"
+    vertical = "下方" if dy >= 0 else "上方"
+    quad_h = "右" if x >= 0.5 else "左"
+    quad_v = "下" if y >= 0.5 else "上"
+    return (
+        f"画面{quad_h}{quad_v}区域的废钢堆内部（不含墙壁），"
+        f"大约水平{x * 100:.0f}%、垂直{y * 100:.0f}%处（原点为左上角），"
+        f"相对废钢几何中心偏{horizontal}{vertical}。"
+        f"严禁放在画面正中央，也严禁贴在车壁或挡板上"
+    )
+
+_WHOLE_IMAGE_BLUR_HINTS = (
+    "柔化整", "整张图模糊", "整图模糊", "降低清晰", "降清晰",
+    "降低分辨率", "降分辨率", "降低锐度", "二次渲染", "把画面弄糊",
+)
+
+def sanitize_vlm_suggestion(text: str) -> str:
+    """去掉让整张图发糊的建议，标签文字模糊可以保留。"""
+    if not text:
+        return ""
+    parts = re.split(r"[。；;\n]+", str(text))
+    kept = []
+    for part in parts:
+        piece = part.strip()
+        if not piece:
+            continue
+        if "标签" in piece or "字迹" in piece or "文字" in piece:
+            kept.append(piece)
+            continue
+        if any(hint in piece for hint in _WHOLE_IMAGE_BLUR_HINTS):
+            continue
+        kept.append(piece)
+    return "。".join(kept).strip()
+
+# ============================================================
+# 目录、采样、接口和主流程。
+# ============================================================
+
+FUSION_SCORE_AXES = (
+    "weathering_score",
+    "lighting_score",
+    "occlusion_score",
+    "style_score",
+    "background_preservation_score",
+    "identity_score",
+)
+
+QUALITY_THRESHOLD = 85.0
+
+def quality_gate(evaluation: dict[str, Any]) -> dict[str, Any]:
+    scores: dict[str, float] = {}
+    reasons = []
+    for key in FUSION_SCORE_AXES:
+        try:
+            score = float(evaluation.get(key, 0))
+            if not math.isfinite(score):
+                score = 0.0
+        except (TypeError, ValueError):
+            score = 0.0
+        score = min(100.0, max(0.0, score))
+        scores[key] = score
+        if score <= QUALITY_THRESHOLD:
+            reasons.append(f"{key}_not_above_85")
+    if evaluation.get("object_present") is not True:
+        reasons.append("object_presence_not_confirmed")
+    for key in (
+        "new_appearance_detected",
+        "pasted_appearance_detected",
+        "material_violation",
+    ):
+        if evaluation.get(key) is not False:
+            reasons.append(key)
+    return {
+        "passed": not reasons,
+        "scores": scores,
+        "minimum_score": min(scores.values()),
+        "reasons": reasons,
+        "evidence_type": "vlm_visual_opinion_not_human_acceptance",
+    }
+
+def edit_region(
+    xy: list[float], ratio: float, image_size: tuple[int, int], cross_ratio: float
+) -> list[float]:
+    """Return a normalized interactive edit hint, including support and shadow context."""
+    width, height = image_size
+    box_w = min(0.72, max(0.14, ratio * 1.55 + 0.03))
+    box_h = min(
+        0.60, max(0.16, ratio * (0.60 + min(1.0, cross_ratio)) * width / height)
+    )
+    cx = min(0.96 - box_w / 2, max(0.04 + box_w / 2, float(xy[0])))
+    cy = min(0.84 - box_h / 2, max(0.10 + box_h / 2, float(xy[1])))
+    return [
+        round(cx - box_w / 2, 5),
+        round(cy - box_h / 2, 5),
+        round(cx + box_w / 2, 5),
+        round(cy + box_h / 2, 5),
+    ]
+
+def load_catalog(
+    path: str | Path, reference_root: str | Path | None = None
+) -> dict[str, Any]:
+    data = json.loads(Path(path).read_text(encoding="utf-8"))
+    if data.get("schema_version") != "1.0" or not isinstance(data.get("objects"), list):
+        raise ValueError("物品目录格式不符合 1.0 约定")
+    catalog_path = Path(path).resolve()
+    root = Path(reference_root or data["reference_root"]).expanduser()
+    if not root.is_absolute():
+        root = catalog_path.parent.parent / root
+    root = root.resolve()
+    ids, names = set(), set()
+    for profile in data["objects"]:
+        identifier = profile["id"]
+        filename = profile["reference_filename"]
+        if identifier in ids or filename in names:
+            raise ValueError("物品 ID 和参考图文件名必须唯一")
+        ids.add(identifier)
+        names.add(filename)
+        reference = (root / filename).resolve()
+        if not reference.is_relative_to(root) or not reference.is_file():
+            raise ValueError(f"找不到目录中的参考图：{filename}")
+        policy = profile["size_policy"]
+        if policy["reference_length_mm"] <= 0 or policy["cross_mm"] <= 0:
+            raise ValueError(f"{identifier} 的尺寸必须为正")
+        low, high = policy["visible_ratio_range"]
+        if not 0 < low <= high < 1:
+            raise ValueError(f"{identifier} 的可见比例范围无效")
+    data["reference_root"] = str(root)
+    return data
+
+def catalog_items(catalog: dict[str, Any]) -> list[dict[str, Any]]:
+    return [
+        {
+            "path": Path(catalog["reference_root"]) / profile["reference_filename"],
+            "class": profile["category"],
+            "weight": profile.get("sampling_weight", 1.0),
+            "filename": profile["reference_filename"],
+            "profile_id": profile["id"],
+            "profile": profile,
+        }
+        for profile in catalog["objects"]
+    ]
+
+def select_profile(catalog: dict[str, Any], identifier: str) -> dict[str, Any]:
+    for profile in catalog["objects"]:
+        if identifier in (
+            profile["id"],
+            profile["reference_filename"],
+            profile.get("original_filename"),
+        ):
+            return profile
+    raise ValueError(f"目录中没有该物品：{identifier}")
+
+def profile_brief(profile: dict[str, Any]) -> dict[str, Any]:
+    policy = profile["size_policy"]
+    return {
+        "height_cm": policy["reference_length_mm"] / 10,
+        "diameter_cm": policy["cross_mm"] / 10,
+        "cross_name": policy["cross_name"],
+        "expose": profile["exposure_hint"],
+        "forbid": "；".join(profile["forbidden_changes"]),
+        "parts": [
+            {"name": name, "cm": value / 10}
+            for name, value in profile["parts_mm"].items()
+        ],
+        "evidence_status": profile["dimension_evidence"]["status"],
+        "physical_name": profile["name"],
+        "profile_id": profile["id"],
+    }
+
+per_item_catalog_items = catalog_items
+
+per_item_evaluation_prompt = evaluation_user_prompt
+
+per_item_evaluator_prompt = evaluator_prompt
+
+load_per_item_catalog = load_catalog
+
+per_item_brief = profile_brief
+
+render_per_item_prompt = render_prompt
+
+per_item_size_spec = size_spec
+
+fusion_quality_gate = quality_gate
+
+fusion_edit_region = edit_region
+
+# ============ 强制禁用SSL验证 ============
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+requests.packages.urllib3.disable_warnings()
+ssl._create_default_https_context = ssl._create_unverified_context
+os.environ['PYTHONHTTPSVERIFY'] = '0'
+os.environ['REQUESTS_CA_BUNDLE'] = ''
+os.environ['CURL_CA_BUNDLE'] = ''
+
+IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp"}
+
+# ============ 自定义SSL适配器 ============
+
+class SSLAdapter(requests.adapters.HTTPAdapter):
+    def init_poolmanager(self, *args, **kwargs):
+        import ssl
+        ctx = ssl.create_default_context()
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
+        kwargs['ssl_context'] = ctx
+        return super().init_poolmanager(*args, **kwargs)
+
+def get_session_with_ssl_bypass():
+    session = requests.Session()
+    adapter = SSLAdapter()
+    session.mount('https://', adapter)
+    session.verify = False
+    
+    retry_strategy = urllib3.Retry(
+        total=5,
+        backoff_factor=2,
+        status_forcelist=[429, 500, 502, 503, 504],
+        allowed_methods=["HEAD", "GET", "POST", "PUT", "DELETE", "OPTIONS", "TRACE"]
+    )
+    adapter = requests.adapters.HTTPAdapter(max_retries=retry_strategy)
+    session.mount('http://', adapter)
+    session.mount('https://', adapter)
+    
+    return session
+
+# ============ Prompt分析器类 ============
+
+class PromptAnalyzer:
+    def __init__(self, output_dir: Path):
+        self.output_dir = output_dir
+        self.output_dir.mkdir(parents=True, exist_ok=True)
+        
+        self.good_prompts_file = output_dir / "good_prompts.json"
+        self.bad_prompts_file = output_dir / "bad_prompts.json"
+        self.prompt_stats_file = output_dir / "prompt_stats.json"
+        
+        self.good_prompts: List[Dict] = []
+        self.bad_prompts: List[Dict] = []
+        
+        self._load_data()
+    
+    def _load_data(self):
+        if self.good_prompts_file.exists():
+            try:
+                with open(self.good_prompts_file, 'r', encoding='utf-8') as f:
+                    self.good_prompts = json.load(f)
+            except:
+                self.good_prompts = []
+        
+        if self.bad_prompts_file.exists():
+            try:
+                with open(self.bad_prompts_file, 'r', encoding='utf-8') as f:
+                    self.bad_prompts = json.load(f)
+            except:
+                self.bad_prompts = []
+    
+    def add_prompt_record(self, prompt: str, image_id: str, object_class: str, 
+                          size_judgment: str, confidence: float, 
+                          quality_score: float, fusion_quality: str,
+                          round_num: int = 0,
+                          full_prompt: str = "", fusion_passed: Optional[bool] = None):
+        record = {
+            "image_id": image_id,
+            "object_class": object_class,
+            "size_judgment": size_judgment,
+            "confidence": confidence,
+            "quality_score": quality_score,
+            "fusion_quality": fusion_quality,
+            "round_num": round_num,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "prompt_text": prompt,
+            "full_prompt": full_prompt if full_prompt else prompt,
+            "prompt_length": len(prompt),
+            "fusion_passed": fusion_passed,
+        }
+        
+        is_good = (
+            size_judgment == "acceptable" and 
+            confidence >= 0.5 and 
+            quality_score >= 0.5
+            and fusion_passed is not False
+        )
+        
+        if is_good:
+            self.good_prompts.append(record)
+            print(f"  [Prompt分析] ✅ 好Prompt已保存 (第{len(self.good_prompts)}个)")
+        else:
+            self.bad_prompts.append(record)
+            print(f"  [Prompt分析] ❌ 差Prompt已保存 (第{len(self.bad_prompts)}个)")
+        
+        self._save_prompts()
+    
+    def _save_prompts(self):
+        with open(self.good_prompts_file, 'w', encoding='utf-8') as f:
+            json.dump(self.good_prompts, f, ensure_ascii=False, indent=2)
+        
+        with open(self.bad_prompts_file, 'w', encoding='utf-8') as f:
+            json.dump(self.bad_prompts, f, ensure_ascii=False, indent=2)
+    
+    def get_stats(self) -> Dict[str, Any]:
+        return {
+            "total_records": len(self.good_prompts) + len(self.bad_prompts),
+            "good_count": len(self.good_prompts),
+            "bad_count": len(self.bad_prompts),
+            "good_prompts_file": str(self.good_prompts_file),
+            "bad_prompts_file": str(self.bad_prompts_file),
+            "last_update": datetime.now(timezone.utc).isoformat()
+        }
+    
+    def save_stats(self):
+        stats = self.get_stats()
+        with open(self.prompt_stats_file, 'w', encoding='utf-8') as f:
+            json.dump(stats, f, ensure_ascii=False, indent=2)
+    
+    def print_summary(self):
+        stats = self.get_stats()
+        print("\n" + "="*60)
+        print("📊 Prompt分析统计")
+        print("="*60)
+        print(f"总记录数: {stats['total_records']}")
+        print(f"好Prompt: {stats['good_count']}")
+        print(f"差Prompt: {stats['bad_count']}")
+        
+        if self.good_prompts:
+            print(f"\n✅ 好的Prompt示例 (最新的3条):")
+            for i, p in enumerate(self.good_prompts[-3:]):
+                print(f"  {i+1}. [{p['object_class']}] {p['prompt_text'][:150]}...")
+        
+        if self.bad_prompts:
+            print(f"\n❌ 差的Prompt示例 (最新的3条):")
+            for i, p in enumerate(self.bad_prompts[-3:]):
+                print(f"  {i+1}. [{p['object_class']}] {p['prompt_text'][:150]}...")
+        print("="*60)
+
+# ============ 配置类 ============
+
+@dataclass
+class AppConfig:
+    image_api_key: str = field(repr=False)
+    model: str
+    image_api_url: str
+    image_protocol: str
+    size: str
+    output_format: str
+    watermark: bool
+    max_images: int
+    timeout_seconds: int
+    sleep_seconds: float
+    total_num: int
+    seed: Optional[int]
+    
+    object_resize_scale: float
+    object_resize_scales: Dict[str, Tuple[float, float]]
+    object_size_briefs: Dict[str, Dict[str, Any]]
+    object_canvas_scale: float
+    object_opacity: float
+    object_anchor: str
+    
+    backgrounds_dir: Path
+    objects_dir: Path
+    prompt_templates_path: Path
+    negative_prompt_path: Path
+    output_images_dir: Path
+    output_final_images_dir: Path
+    output_metadata_dir: Path
+    output_failed_dir: Path
+    output_bbox_dir: Path
+    output_analysis_dir: Path
+    
+    vlm_api_key: str = field(repr=False)
+    vlm_api_url: str
+    vlm_model: str
+    enable_vlm_optimization: bool = True
+    max_optimization_rounds: int = 3
+    size_tolerance: str = "class_range"
+    feed_object_views: bool = True
+    max_object_views: int = 3
+    six_views_dir: Optional[Path] = None
+    object_catalog_path: Optional[Path] = None
+    object_catalog: Optional[Dict[str, Any]] = None
+    active_object_profile: Optional[Dict[str, Any]] = None
+    background_catalog: Optional[Dict[str, Any]] = None
+    active_background_profile: Optional[Dict[str, Any]] = None
+    active_scene_context: Optional[Dict[str, Any]] = None
+    active_edit_region: Optional[List[float]] = None
+    active_position_xy: Optional[List[float]] = None
+    use_interactive_edit_region: bool = True
+    vlm_thinking_mode: str = "disabled"
+    prepare_weathered_reference: bool = True
+    active_weathered_reference: Optional[Path] = None
+    active_reference_kind: str = "six_view_atlas"
+    active_reference_preparation: Optional[Dict[str, Any]] = None
+    weathered_reference_rounds: int = 2
+    
+    vlm_evaluator_prompt: str = field(default_factory=lambda: (
+        "你是废钢车斗异物质检员。只输出有效JSON。车斗水平视野约240厘米。\n"
+        "先估计可见最长边占画面宽度的 visible_ratio，再换成厘米：visible_cm = visible_ratio × 240。\n"
+        "尺寸以该类真实厘米为准，包括参照长度、筒径或主横截面，以及握把、喷管、活塞杆、耳环、法兰等结构。\n"
+        "不要把真实厘米再缩小成模型。遮挡可以挡住一部分，但露出部分必须仍是真实尺度。\n"
+        "太大：可见最长边的厘米明显大于真实参照长度，或画得比真实件更大。\n"
+        "太小：没放进去，或露出部分明显小于真实横截面，像缩小的玩具。\n"
+        "合格：露出部分落在真实横截面到真实参照长度之间，结构比例符合真实直径/高度。\n"
+        "看不见全长是埋入，不要因此判太小；能看见也不要因此判太大。\n"
+        "小件如果画得达到更大类别的真实尺寸，判定为太大。\n"
+        "文字只要求模糊异物标签；禁止建议柔化整张图或降低分辨率。\n"
+        "sharpness 只记整图是否发糊（sharp|ok|soft），不要靠缩小异物来修清晰度。\n"
+        "另评五项外观，每项只评自己的内容，取值 bad|ok|good："
+        "color_temperature_match 只看白平衡和冷暖；"
+        "tone_match 只看色相和明度，不看饱和度；"
+        "saturation_match 必须发灰且明显低于废钢，鲜红、橘红、亮黄、翠绿、纯蓝、荧光或与废钢同样鲜艳为 bad；"
+        "pixel_match 只看颗粒、压缩块和局部对比；"
+        "sharpness_match 只看失焦、拖影和边缘软硬，异物更锐为 bad。\n"
+        "tone_fix 只改色相和明度，不要把饱和度写进 tone_fix。\n"
+        "另给三项 0 到 100 的整数分：tone_score 色调，size_score 大小，overall_score 整体效果。\n"
+        "三项都高于 85 才算这轮合格。每项给一句修正：tone_fix、size_fix、overall_fix。\n"
+        "输出JSON：{\"visible_ratio\": 0.0, \"size_judgment\": \"too_large|acceptable|too_small\", "
+        "\"tone_score\": 0, \"size_score\": 0, \"overall_score\": 0, "
+        "\"tone_fix\": \"\", \"size_fix\": \"\", \"overall_fix\": \"\", "
+        "\"color_temperature_match\": \"bad|ok|good\", \"tone_match\": \"bad|ok|good\", "
+        "\"saturation_match\": \"bad|ok|good\", \"pixel_match\": \"bad|ok|good\", "
+        "\"sharpness_match\": \"bad|ok|good\", "
+        "\"sharpness\": \"sharp|ok|soft\", \"confidence\": 0.0, \"reason\": \"\", "
+        "\"improvement_suggestion\": \"\", \"quality_score\": 0.0, "
+        "\"fusion_quality\": \"very bad|bad|ok|good|very good\"}"
+    ))
+
+# ============ 尺寸计算工具 ============
+
+# 废钢车斗水平视野约 2.4 m，用于把宽度百分比换成厘米
+HOPPER_FOV_M = 2.4
+
+def image_sharpness_score(path: Path) -> float:
+    """Laplacian 方差，数值越高越锐。用于发现后轮二次渲染发糊。"""
+    img = Image.open(path).convert("L")
+    img = img.resize(
+        (max(1, img.width // 4), max(1, img.height // 4)),
+        Image.Resampling.BOX,
+    )
+    edge = img.filter(ImageFilter.Kernel((3, 3), [0, 1, 0, 1, -4, 1, 0, 1, 0], scale=1, offset=0))
+    pix = list(edge.getdata())
+    if not pix:
+        return 0.0
+    mean = sum(pix) / len(pix)
+    return sum((p - mean) ** 2 for p in pix) / len(pix)
+
+OBJECT_SCALE_ALIASES = {
+    "fire_extinguisher": "灭火器",
+    "gas_cylinder": "气瓶",
+    "hydraulic_cylinder": "液压缸",
+    "shock_absorber": "减震器",
+    "accumulator": "集油器",
+    "sealed_container": "储罐",
+    "filter": "分离过滤器",
+    "jack": "千斤顶",
+    "pesticide_can": "杀虫剂罐",
+    "pneumatic_cylinder": "气缸",
+    "spray_paint_can": "自喷漆罐",
+    "ball_valve": "球阀",
+    "bearing_housing": "轴承座",
+    "sealant_can": "密封胶罐",
+}
+
+def parse_object_resize_scales(raw: Dict[str, Any]) -> Dict[str, Tuple[float, float]]:
+    """读取 config.yaml 中每个物体的 [min, max] 或单值，单位为可见最长边/画面宽度。"""
+    fallback = float(raw.get("object_resize_scale", 0.022))
+    parsed: Dict[str, Tuple[float, float]] = {}
+    data = raw.get("object_resize_scales") or {}
+    if not isinstance(data, dict):
+        raise ValueError("object_resize_scales 必须是按物体类别分组的字典")
+    for key, value in data.items():
+        name = str(key).strip()
+        if not name:
+            raise ValueError("object_resize_scales 含有空类别名")
+        if isinstance(value, (int, float)) and not isinstance(value, bool):
+            low = high = float(value)
+        elif isinstance(value, dict):
+            low = float(value.get("min", fallback))
+            high = float(value.get("max", low))
+        elif isinstance(value, (list, tuple)) and len(value) == 2:
+            low, high = float(value[0]), float(value[1])
+        else:
+            raise ValueError(f"物体 {name} 的缩放尺寸格式无效，请使用 [min, max]")
+        if low > high:
+            low, high = high, low
+        if not 0 < low <= high < 1:
+            raise ValueError(f"物体 {name} 的缩放尺寸须满足 0 < min <= max < 1，当前 {low}–{high}")
+        parsed[name] = (low, high)
+    return parsed
+
+def actual_scale_range_from_brief(brief: Dict[str, Any]) -> Tuple[float, float]:
+    """真实横截面到真实参照长度，换成占 240 厘米车斗视野的比例。"""
+    fov_cm = HOPPER_FOV_M * 100.0
+    length_cm = float(brief["height_cm"])
+    cross_cm = float(brief["diameter_cm"])
+    if "轴孔" in str(brief.get("cross_name") or "") or "孔径" in str(brief.get("cross_name") or ""):
+        outers = [
+            float(part["cm"]) for part in brief.get("parts") or []
+            if "孔" not in str(part.get("name") or "")
+        ]
+        if outers:
+            ordered = sorted(outers)
+            cross_cm = ordered[len(ordered) // 2]
+    low_cm = min(length_cm, cross_cm)
+    high_cm = max(length_cm, cross_cm)
+    low = max(0.008, low_cm / fov_cm * 0.85)
+    high = min(0.95, high_cm / fov_cm * 1.10)
+    if low > high:
+        low, high = high, low
+    return (low, high)
+
+def object_scale_range(cfg: AppConfig, object_class: Optional[str] = None) -> Tuple[float, float]:
+    profile = getattr(cfg, "active_object_profile", None)
+    if profile and profile["category"] == object_class:
+        return tuple(profile["size_policy"]["visible_ratio_range"])
+    fallback = (cfg.object_resize_scale, cfg.object_resize_scale)
+    if not object_class:
+        return fallback
+    brief = lookup_size_brief(cfg, object_class)
+    if brief:
+        return actual_scale_range_from_brief(brief)
+    scales = cfg.object_resize_scales or {}
+    if object_class in scales:
+        return scales[object_class]
+    canonical = OBJECT_SCALE_ALIASES.get(object_class)
+    if canonical and canonical in scales:
+        return scales[canonical]
+    for name, rng in scales.items():
+        if name and (name in object_class or object_class in name):
+            return rng
+    return fallback
+
+def sample_object_resize_scale(cfg: AppConfig, object_class: Optional[str] = None) -> float:
+    low, high = object_scale_range(cfg, object_class)
+    return random.uniform(low, high) if high > low else low
+
+def parse_object_size_briefs(raw: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
+    """读取每类真实高度、主横截面尺寸和其余结构尺寸。"""
+    data = raw.get("object_size_briefs") or {}
+    if not isinstance(data, dict):
+        raise ValueError("object_size_briefs 必须是按物体类别分组的字典")
+    parsed: Dict[str, Dict[str, Any]] = {}
+    for key, value in data.items():
+        name = str(key).strip()
+        if not name or not isinstance(value, dict):
+            raise ValueError(f"物体 {name or key} 的尺寸说明格式无效")
+        height_cm = float(value.get("height_cm") or 0)
+        diameter_cm = float(value.get("diameter_cm") or 0)
+        if height_cm <= 0 or diameter_cm <= 0:
+            raise ValueError(f"物体 {name} 需要正的 height_cm 和 diameter_cm")
+        parts = []
+        for part in value.get("parts") or []:
+            if not isinstance(part, dict):
+                continue
+            part_name = str(part.get("name") or "").strip()
+            part_cm = float(part.get("cm") or 0)
+            if part_name and part_cm > 0:
+                parts.append({"name": part_name, "cm": part_cm})
+        parsed[name] = {
+            "height_cm": height_cm,
+            "diameter_cm": diameter_cm,
+            "cross_name": str(value.get("cross_name") or "筒径").strip(),
+            "expose": str(value.get("expose") or "").strip(),
+            "forbid": str(value.get("forbid") or "").strip(),
+            "parts": parts,
+        }
+    return parsed
+
+def lookup_size_brief(cfg: Optional[AppConfig], object_class: Optional[str]) -> Optional[Dict[str, Any]]:
+    if cfg is None or not object_class:
+        return None
+    profile = getattr(cfg, "active_object_profile", None)
+    if profile and profile["category"] == object_class:
+        return per_item_brief(profile)
+    briefs = cfg.object_size_briefs or {}
+    if object_class in briefs:
+        return briefs[object_class]
+    canonical = OBJECT_SCALE_ALIASES.get(object_class)
+    if canonical and canonical in briefs:
+        return briefs[canonical]
+    for name, brief in briefs.items():
+        if name and (name in object_class or object_class in name):
+            return brief
+    return None
+
+def compute_next_target_ratio(spec: Dict[str, Any], evaluation: Dict[str, Any]) -> float:
+    """按本轮设定和画面返回的可见比例计算下一轮设定。径高比不变，筒径随可见边同比变化。"""
+    current = float(spec["target_ratio"])
+    low = float(spec["scale_min"])
+    high = float(spec["scale_max"])
+    judgment = evaluation.get("size_judgment")
+    measured = evaluation.get("visible_ratio")
+    measured_f = float(measured) if isinstance(measured, (int, float)) and measured is not None else None
+    if judgment == "too_large" and measured_f and measured_f > current > 0:
+        nxt = current * (current / measured_f)
+        return min(max(nxt, low * 0.88), current)
+    if judgment == "too_small":
+        if measured_f and measured_f > 0:
+            nxt = min(high, max(current * 1.2, measured_f * 1.35))
+        else:
+            nxt = min(high * 1.12, current * 1.25)
+        return min(high * 1.12, max(nxt, current))
+    if judgment == "too_large":
+        return max(low * 0.88, current * 0.75)
+    return min(max(current, low), high)
+
+def calculate_optimal_size(
+    background_path: Path,
+    object_class: Optional[str] = None,
+    cfg: Optional[AppConfig] = None,
+    target_ratio: Optional[float] = None,
+) -> Dict[str, Any]:
+    bg_img = Image.open(background_path)
+    bg_w, bg_h = bg_img.size
+    scale_min, scale_max = (
+        object_scale_range(cfg, object_class) if cfg is not None
+        else (0.016, 0.034)
+    )
+    if target_ratio is None:
+        target_ratio = (
+            sample_object_resize_scale(cfg, object_class) if cfg is not None
+            else random.uniform(scale_min, scale_max)
+        )
+    target_ratio = min(max(target_ratio, scale_min * 0.8), scale_max * 1.15)
+    target_width = max(16, int(round(bg_w * target_ratio)))
+    target_height = max(16, int(round(bg_h * target_ratio)))
+    result = {
+        "bg_size": (bg_w, bg_h),
+        "target_width": target_width,
+        "target_height": target_height,
+        "target_ratio": target_ratio,
+        "scale_min": scale_min,
+        "scale_max": scale_max,
+        "object_class": object_class,
+        "description": (
+            f"{object_class or '异物'}可见最长边约占画面宽度的{target_ratio*100:.1f}%"
+            f"（约{target_ratio * HOPPER_FOV_M * 100:.0f}厘米，配置 {scale_min*100:.1f}–{scale_max*100:.1f}%）"
+        ),
+    }
+    profile = getattr(cfg, "active_object_profile", None) if cfg is not None else None
+    if profile:
+        result["profile_id"] = profile["id"]
+        result["dimension_evidence"] = profile["dimension_evidence"]
+        result["description"] = (
+            f"{profile['id']} {profile['name']}主体可见最长边目标{target_ratio:.2%}；"
+            f"允许{scale_min:.2%}–{scale_max:.2%}；背景尺度尚未标定，厘米为工作假设。"
+        )
+    return result
 
 # ============ 废钢位置函数（几何中心 + 四角高斯场） ============
 
 POSITION_FIELD_GRID = 64
 
-
 def _clamp01(value: float) -> float:
     return max(0.0, min(1.0, float(value)))
-
 
 def _parse_xy(value: Any) -> Tuple[float, float]:
     if isinstance(value, (list, tuple)) and len(value) >= 2:
@@ -1398,14 +1610,12 @@ def _parse_xy(value: Any) -> Tuple[float, float]:
         x, y = x / 100.0, y / 100.0
     return _clamp01(x), _clamp01(y)
 
-
 def _order_corners_around_center(
     center: Tuple[float, float],
     corners: List[Tuple[float, float]],
 ) -> List[Tuple[float, float]]:
     cx, cy = center
     return sorted(corners, key=lambda p: math.atan2(p[1] - cy, p[0] - cx))
-
 
 def _point_in_polygon(x: float, y: float, polygon: List[Tuple[float, float]]) -> bool:
     inside = False
@@ -1418,7 +1628,6 @@ def _point_in_polygon(x: float, y: float, polygon: List[Tuple[float, float]]) ->
             inside = not inside
         j = i
     return inside
-
 
 def assemble_scrap_geometry(
     center: Tuple[float, float],
@@ -1458,14 +1667,12 @@ def assemble_scrap_geometry(
         "vlm_center": center,
     }
 
-
 def fallback_scrap_geometry() -> Dict[str, Any]:
     """无 VLM 结果时：略偏画面下方的废钢区域，避开常见上沿车壁。"""
     return assemble_scrap_geometry(
         center=(0.50, 0.58),
         corners=[(0.16, 0.26), (0.84, 0.26), (0.88, 0.90), (0.12, 0.90)],
     )
-
 
 def geometry_from_vlm_reply(result: Any) -> Dict[str, Any]:
     """从同一段对话的首轮回复里取几何；失败时用回退四边形。"""
@@ -1487,10 +1694,8 @@ def geometry_from_vlm_reply(result: Any) -> Dict[str, Any]:
         print(f"  [位置] VLM 几何识别失败，使用回退四边形: {exc}")
         return fallback_scrap_geometry()
 
-
 def _edge_length(a: Tuple[float, float], b: Tuple[float, float]) -> float:
     return math.hypot(a[0] - b[0], a[1] - b[1])
-
 
 def gaussian_center_weights(corners: List[Tuple[float, float]]) -> List[float]:
     """
@@ -1515,7 +1720,6 @@ def gaussian_center_weights(corners: List[Tuple[float, float]]) -> List[float]:
     ]
     total = sum(raw) or 1.0
     return [w / total for w in raw]
-
 
 def build_position_probability_field(
     geometry: Dict[str, Any],
@@ -1560,7 +1764,6 @@ def build_position_probability_field(
         field.append(row)
     return field
 
-
 def sample_from_probability_field(field: List[List[float]]) -> Tuple[Tuple[float, float], float]:
     grid = len(field)
     weights: List[float] = []
@@ -1576,7 +1779,6 @@ def sample_from_probability_field(field: List[List[float]]) -> Tuple[Tuple[float
     idx = random.choices(range(len(weights)), weights=weights, k=1)[0]
     return coords[idx], weights[idx] / total
 
-
 def _mixture_density(
     x: float,
     y: float,
@@ -1590,7 +1792,6 @@ def _mixture_density(
         dy = y - gy
         density += weight * math.exp(-0.5 * (dx * dx + dy * dy) / (sigma * sigma))
     return density
-
 
 def sample_from_weighted_gaussians(
     geometry: Dict[str, Any],
@@ -1626,25 +1827,6 @@ def sample_from_weighted_gaussians(
     farthest = max(gcs, key=lambda p: math.hypot(p[0] - 0.5, p[1] - 0.5))
     return farthest, _mixture_density(farthest[0], farthest[1], gcs, sigmas, weights)
 
-
-def describe_sampled_position(
-    xy: Tuple[float, float],
-    center: Tuple[float, float],
-) -> str:
-    x, y = xy
-    dx, dy = x - center[0], y - center[1]
-    horizontal = "右侧" if dx >= 0 else "左侧"
-    vertical = "下方" if dy >= 0 else "上方"
-    quad_h = "右" if x >= 0.5 else "左"
-    quad_v = "下" if y >= 0.5 else "上"
-    return (
-        f"画面{quad_h}{quad_v}区域的废钢堆内部（不含墙壁），"
-        f"大约水平{x * 100:.0f}%、垂直{y * 100:.0f}%处（原点为左上角），"
-        f"相对废钢几何中心偏{horizontal}{vertical}。"
-        f"严禁放在画面正中央，也严禁贴在车壁或挡板上"
-    )
-
-
 def sample_foreign_object_position(geometry: Dict[str, Any]) -> Dict[str, Any]:
     """由废钢几何构造加权高斯并采样一个异物出现位置。"""
     build_position_probability_field(geometry)
@@ -1664,21 +1846,20 @@ def sample_foreign_object_position(geometry: Dict[str, Any]) -> Dict[str, Any]:
         "description": description,
     }
 
-
 CYLINDER_CLASSES = {
     "灭火器", "气瓶", "杀虫剂罐", "自喷漆罐", "密封胶罐", "集油器",
     "气缸", "油缸", "液压缸", "减震器", "千斤顶", "分离过滤器", "储罐",
 }
-SCORE_AXES = ("tone_score", "size_score", "overall_score")
-PASS_SCORE = 85.0
 
+SCORE_AXES = ("tone_score", "size_score", "overall_score")
+
+PASS_SCORE = 85.0
 
 def is_cylinder_class(object_class: Optional[str]) -> bool:
     if not object_class:
         return False
     name = OBJECT_SCALE_ALIASES.get(object_class, object_class)
     return name in CYLINDER_CLASSES or object_class in CYLINDER_CLASSES
-
 
 def _score100(value: Any) -> float:
     try:
@@ -1689,19 +1870,15 @@ def _score100(value: Any) -> float:
         number *= 100.0
     return max(0.0, min(100.0, number))
 
-
 def score_triplet(evaluation: Dict[str, Any]) -> Dict[str, float]:
     return {key: _score100(evaluation.get(key)) for key in SCORE_AXES}
-
 
 def average_score(evaluation: Dict[str, Any]) -> float:
     scores = score_triplet(evaluation)
     return sum(scores.values()) / len(SCORE_AXES)
 
-
 def scores_pass(evaluation: Dict[str, Any]) -> bool:
     return all(score > PASS_SCORE for score in score_triplet(evaluation).values())
-
 
 def sample_object_pose(object_class: Optional[str] = None) -> Dict[str, Any]:
     """圆柱偏向斜插或躺在坡底；非圆柱水平插入多于斜插，竖直最少。斜插相对水平线 0°–30°。"""
@@ -1769,11 +1946,9 @@ def sample_object_pose(object_class: Optional[str] = None) -> Dict[str, Any]:
         "description": description,
     }
 
-
 def sample_horizontal_orientation() -> Dict[str, Any]:
     """兼容旧调用：按非圆柱抽样。"""
     return sample_object_pose(None)
-
 
 # ============ 物体图片加载器 ============
 
@@ -1800,7 +1975,6 @@ def six_view_object_items(six_views_dir: Path, catalog_path: Path) -> List[Dict[
         print("[WARNING] 六视图缺失: " + ", ".join(missing))
     print(f"[DEBUG] 六视图输入: {len(items)} 张，目录 {six_views_dir}")
     return items
-
 
 def get_all_object_images_with_classes(object_root: Path, prompt_templates: Dict[str, List[str]]) -> List[Dict[str, Any]]:
     object_items = []
@@ -1889,7 +2063,6 @@ def get_all_object_images_with_classes(object_root: Path, prompt_templates: Dict
     
     return object_items
 
-
 def choose_weighted_object(object_items: List[Dict[str, Any]]) -> Dict[str, Any]:
     if not object_items:
         return None
@@ -1908,7 +2081,6 @@ def choose_weighted_object(object_items: List[Dict[str, Any]]) -> Dict[str, Any]
             return item
     
     return object_items[-1]
-
 
 def collect_object_views(
     object_path: Path,
@@ -1951,7 +2123,6 @@ def collect_object_views(
     if max_views <= 0:
         return []
     return views[:max_views]
-
 
 # ============ VLM分析器类 ============
 
@@ -2897,7 +3068,6 @@ class VLMAnalyzer:
             f"【整体要求】异物必须与废钢环境完美融合，看起来像是自然存在于废钢堆中的废弃部件。"
         )
 
-
 # ============ 工具函数 ============
 
 def image_to_data_url_vlm(path: Path) -> str:
@@ -2909,7 +3079,6 @@ def image_to_data_url_vlm(path: Path) -> str:
         image.save(buffer, format="JPEG", quality=88)
     return "data:image/jpeg;base64," + base64.b64encode(buffer.getvalue()).decode("utf-8")
 
-
 def load_yaml_config(path: Path) -> Dict[str, Any]:
     if not path.exists():
         return {}
@@ -2918,221 +3087,19 @@ def load_yaml_config(path: Path) -> Dict[str, Any]:
         return {}
     return yaml.safe_load(text) or {}
 
-
-def ensure_file(path: Path, default_text: str) -> None:
-    if not path.exists():
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(default_text, encoding="utf-8")
-
-
-def load_prompt_templates(path: Path) -> Dict[str, List[str]]:
-    DEFAULT_PROMPT_TEMPLATES = {
-        "fire_extinguisher": [
-            "在废钢堆的缝隙中嵌入一个真实大小的红色灭火器，被废钢遮挡只露一小部分，表面有灰尘划痕锈迹。",
-            "在废钢堆深处放入一个真实大小的灭火器，被遮挡不显眼，保持灭火器的典型形状，表面旧化带锈。",
-            "将一个小型灭火器塞入废钢件的夹缝中，瓶体大部分被遮挡，表面有褪色和锈迹。",
-        ],
-        "gas_cylinder": [
-            "在废钢背景中嵌入一个真实大小的气瓶，被废钢遮挡只露一小部分，保持气瓶的圆柱形和两端特征，表面有锈迹磨损。",
-            "在废钢堆深处放入一个真实大小的气瓶，被遮挡不显眼，保持气瓶的原本形态，表面旧化带锈。",
-            "将一个小气瓶卡在废钢堆的角落里，被周围的废钢件遮挡，表面有腐蚀痕迹。",
-        ],
-        "shell": [
-            "在废钢背景中嵌入一个真实大小的炮弹，被废钢遮挡只露一小部分，保持炮弹的流线型弹头特征，表面有铁锈泥土。",
-            "在废钢堆深处放入一个真实大小的炮弹，被遮挡不显眼，保持炮弹的典型外观，表面旧化带锈。",
-            "将一枚小炮弹塞入废钢缝隙中，弹体被废钢覆盖，只露出尾部，表面布满锈迹。",
-        ],
-        "lpg_tank": [
-            "在废钢背景中嵌入一个真实大小的液化气罐，被废钢遮挡只露一小部分，保持液化气罐的罐体形状和阀门结构，表面有凹坑锈迹。",
-            "在废钢堆深处放入一个真实大小的液化气罐，被遮挡不显眼，保持液化气罐的形态，表面旧化带锈。",
-            "将一个小液化气罐横放在废钢堆中，大部分被废钢覆盖，表面有严重锈蚀。",
-        ],
-        "accumulator": [
-            "在废钢背景中嵌入一个真实大小的蓄能器，被废钢遮挡只露一小部分，保持蓄能器的圆柱形和端部结构，表面有油泥灰尘。",
-            "在废钢堆深处放入一个真实大小的蓄能器，被遮挡不显眼，保持蓄能器的原本形态，表面旧化带锈。",
-            "将一个小蓄能器嵌入废钢堆的中间层，被周围的废钢件包裹，表面有油污。",
-        ],
-        "hydraulic_cylinder": [
-            "在废钢背景中嵌入一个真实大小的液压缸，被废钢遮挡只露一小部分，保持液压缸的圆柱形和活塞杆特征，表面有油泥划痕。",
-            "在废钢堆深处放入一个真实大小的液压缸，被遮挡不显眼，保持液压缸的典型形状，表面旧化带锈。",
-            "将一个报废的小液压缸塞入废钢缝隙中，缸体被废钢覆盖，活塞杆露出微小部分，表面有油渍。",
-        ],
-        "shock_absorber": [
-            "在废钢背景中嵌入一个真实大小的减震器，被废钢遮挡只露一小部分，保持减震器的圆柱形和连接结构，表面有锈蚀油渍。",
-            "在废钢堆深处放入一个真实大小的减震器，被遮挡不显眼，保持减震器的形态，表面旧化带锈。",
-            "将一个小减震器卡在废钢件的夹缝中，大部分被遮挡，表面有磨损和锈迹。",
-        ],
-        "sealed_container": [
-            "在废钢背景中嵌入一个真实大小的密闭箱体，被废钢遮挡只露一小部分，保持箱体的方形结构和棱边特征，表面有泥土锈迹。",
-            "在废钢堆深处放入一个真实大小的密闭箱体，被遮挡不显眼，保持箱体的原本形状，表面旧化带锈。",
-        ],
-        "tire": [
-            "在废钢背景中嵌入一个真实大小的轮胎，被废钢遮挡只露一小部分，保持轮胎的圆形和胎纹特征，表面有油污磨损。",
-            "在废钢堆深处放入一个真实大小的轮胎，被遮挡不显眼，保持轮胎的典型形态，表面旧化带泥。",
-            "将一个小轮胎嵌入废钢堆中，被周围的废钢挤压，只露出部分胎面，表面有磨损痕迹。",
-        ],
-        "roller": [
-            "在废钢背景中嵌入一个真实大小的滚筒，被废钢遮挡只露一小部分，保持滚筒的圆柱形和表面特征，表面有铁锈油泥。",
-            "在废钢堆深处放入一个真实大小的滚筒，被遮挡不显眼，保持滚筒的原本形状，表面旧化带锈。",
-        ],
-        "wire_rope_drum": [
-            "在废钢背景中嵌入一个真实大小的钢丝绳卷筒，被废钢遮挡只露一小部分，保持卷筒的圆柱形和法兰结构，表面有锈蚀。",
-            "在废钢堆深处放入一个真实大小的钢丝绳卷筒，被遮挡不显眼，保持卷筒的形态，表面旧化带锈。",
-            "将一个小钢丝绳卷筒塞入废钢堆的缝隙中，被废钢覆盖，表面缠绕着断裂的钢丝，锈迹斑斑。",
-        ],
-        "axle": [
-            "在废钢背景中嵌入一个真实大小的汽车后桥，被废钢遮挡只露一小部分，保持后桥的轴形和端部结构，表面有油污锈迹。",
-            "在废钢堆深处放入一个真实大小的汽车后桥，被遮挡不显眼，保持后桥的典型形状，表面旧化带锈。",
-            "将一个小型后桥轴嵌入废钢堆中，被废钢件压住，只露出轴端，表面有油污和锈蚀。",
-        ],
-        "reducer": [
-            "在废钢背景中嵌入一个真实大小的减速机，被废钢遮挡只露一小部分，保持减速机的箱体形状和连接轴，表面有灰尘油污。",
-            "在废钢堆深处放入一个真实大小的减速机，被遮挡不显眼，保持减速机的形态，表面旧化带锈。",
-        ],
-        "track_roller": [
-            "在废钢背景中嵌入一个真实大小的支重轮，被废钢遮挡只露一小部分，保持支重轮的圆形和轮缘特征，表面有铁锈泥土。",
-            "在废钢堆深处放入一个真实大小的支重轮，被遮挡不显眼，保持支重轮的原本形状，表面旧化带锈。",
-        ],
-        "drive_sprocket": [
-            "在废钢背景中嵌入一个真实大小的驱动轮，被废钢遮挡只露一小部分，保持驱动轮的圆形和齿形特征，表面有锈迹磨损。",
-            "在废钢堆深处放入一个真实大小的驱动轮，被遮挡不显眼，保持驱动轮的典型形态，表面旧化带锈。",
-        ],
-        "wheel_end": [
-            "在废钢背景中嵌入一个真实大小的轮边总成，被废钢遮挡只露一小部分，保持轮边总成的盘形和结构特征，表面有油泥灰尘。",
-            "在废钢堆深处放入一个真实大小的轮边总成，被遮挡不显眼，保持轮边总成的形态，表面旧化带锈。",
-        ],
-        "guard_block": [
-            "在废钢背景中嵌入一个真实大小的防护墩，被废钢遮挡只露一小部分，保持防护墩的方形和棱角特征，表面有破损泥土。",
-            "在废钢堆深处放入一个真实大小的防护墩，被遮挡不显眼，保持防护墩的原本形状，表面旧化带泥。",
-        ],
-    }
-    ensure_file(path, json.dumps(DEFAULT_PROMPT_TEMPLATES, ensure_ascii=False, indent=2))
-    return json.loads(path.read_text(encoding="utf-8"))
-
-
-def load_negative_prompt(path: Path) -> str:
-    DEFAULT_NEGATIVE_PROMPT = (
-        "不要改变原始背景，不要生成卡通风格，不要生成干净崭新的异物，"
-        "不要让异物悬浮，不要把异物画成玩具或缩得比真实厘米更小，不要画得比真实参照长度更大，"
-        "不要改变异物的基本形状和结构特征，必须保持物体原本的形态，"
-        "禁止生成反光强烈、亮面、光滑的物体，纹理必须与废钢一致，"
-        "异物必须被废钢遮挡大部分，但仍露出能辨认的一段。"
-        "禁止对异物进行任何形式的变形、拉伸、扭曲或比例改变。"
-        "不要生成看起来像是人工放置的物体，应该看起来像是自然存在于废钢堆中。"
-        "不要放在很显眼的地方，不要让异物成为画面的视觉焦点，必须与背景完美融合。"
-        "不要柔化整张图，不要降低整张图的分辨率，不要二次渲染导致发糊。"
-        "饱和度必须发灰、发浊、褪色，并且明显低于周围废钢。禁止鲜红、橘红、亮黄、翠绿、纯蓝、荧光色。"
-        "异物不能比废钢更锐，也不能比监控原图的颗粒更细。"
-    )
-    ensure_file(path, DEFAULT_NEGATIVE_PROMPT)
-    return path.read_text(encoding="utf-8").strip()
-
-
 def list_images(folder: Path) -> List[Path]:
     if not folder.exists():
         return []
     return [p for p in folder.rglob("*") if p.is_file() and p.suffix.lower() in IMAGE_EXTS]
-
 
 def choose_image(paths: List[Path]) -> Path:
     if not paths:
         raise FileNotFoundError("No images found")
     return random.choice(paths)
 
-
 def save_json(path: Path, data: Dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
-
-
-def build_prompt(
-    object_class: str,
-    prompt: str,
-    negative_prompt: str,
-    object_path: Path = None,
-    background_path: Path = None,
-    position_hint: str = None,
-    orientation_hint: str = None,
-    cfg: Optional[AppConfig] = None,
-    target_ratio: Optional[float] = None,
-) -> str:
-    profile = getattr(cfg, "active_object_profile", None) if cfg is not None else None
-    if profile and profile["category"] == object_class:
-        return render_per_item_prompt(
-            profile, target_ratio=target_ratio, position_hint=position_hint,
-            orientation_hint=orientation_hint, feedback=prompt or "",
-            scene_context=getattr(cfg, "active_scene_context", None),
-            edit_region_xyxy=getattr(cfg, "active_edit_region", None),
-            reference_kind=getattr(cfg, "active_reference_kind", "six_view_atlas"),
-        )
-    if "【本轮设定尺寸】" in (prompt or ""):
-        size_info = "尺寸只按提示词里的【本轮设定尺寸】绘制：结构用真实厘米，可见最长边用本轮厘米，不要把筒径再缩小，不要参考更早轮次"
-    elif background_path:
-        try:
-            size_info = class_size_clause(cfg, object_class, target_ratio)
-        except Exception:
-            size_info = f"{object_class}必须按真实物体大小出现，不要画成玩具或占据整幅画面"
-    else:
-        size_info = f"{object_class}必须按真实物体大小出现，不要画成玩具或占据整幅画面"
-    
-    enhancer = PromptEnhancer()
-    weathering = random.choice(enhancer.get_weathering_descriptions(object_class))
-    scenario = random.choice(enhancer.get_scenario_descriptions())
-    
-    fusion_enhance = (
-        "【精确尺寸控制】\n"
-        f"1. {size_info}\n"
-        "2. 筒径、握把、喷管、活塞杆、耳环、法兰使用真实厘米，不要按可见边同比缩成模型\n"
-        "3. 可见最长边对应该件在240厘米车斗视野中的真实尺度；没放进去时按同一真实尺寸放入\n"
-        "\n【形状严格保持】\n"
-        f"4. 必须严格保持{object_class}原本的形状、结构、比例和轮廓特征\n"
-        "5. 不允许任何形式的变形、拉伸、扭曲或比例改变\n"
-        "6. 圆形必须保持圆形，圆柱形保持圆柱形，方形保持方形\n"
-        "\n【嵌入与遮挡】\n"
-        "7. 异物必须被废钢挤压包裹，从废钢缝隙中露出能辨认的一段，像被自然埋在里面\n"
-        "8. 异物的边缘必须被废钢遮挡，有明显的遮挡和交错，大部分被挡住，但仍须露出能辨认的一小段\n"
-        "9. 异物表面的锈迹、油污、灰尘纹理必须与周围废钢完全一致\n"
-        "\n【色彩与光影融合】\n"
-        "10. 下面五项分开写，禁止混成一句颜色或一句清晰度：\n"
-        f"{appearance_prompt_block(appearance_from_context(getattr(cfg, 'active_scene_context', None)))}\n"
-        "11. 异物的光影必须与背景图片的光照方向完全一致\n"
-        "12. 异物的材质感必须与废钢一致，不能是亮面或光滑的\n"
-        "\n【风格与质感】\n"
-        "13. 禁止生成干净、崭新、反光强烈的物体\n"
-        "14. 废钢的锈蚀纹理必须覆盖在异物表面\n"
-        f"15. {weathering}\n"
-        f"16. 整体场景：{scenario}\n"
-        "17. 废钢场景、时间戳和摄像头文字保持原样，但必须在指定位置新增异物，输出不能与背景图相同\n"
-        "18. 整张监控图禁止柔化、涂抹、降分辨率或二次渲染发糊。异物自己的色温、色调、饱和度、像素和清晰度按上面五项贴齐相邻废钢，不能比废钢更锐、更干净、更鲜艳\n"
-        "19. 每一轮都只在原始监控背景上重画，不要把任何已生成图当作画布\n"
-        "\n【多视图只作参考】\n"
-        f"20. 第1张图是废钢监控原图，只作为画布；第2张及之后是{object_class}的多视角参考\n"
-        "21. 参考图只用来认外形、零件和直径/高度，不要照抄参考图的鲜艳原色，颜色必须改成发灰、褪色、蒙尘；不要把参考图里的物体直接插入场景\n"
-        "22. 禁止抠图、贴图、叠加、原样拷贝；禁止留下白底、摄影棚、宫格线或前/后/左/右/上/下标签\n"
-        "23. 必须按本轮真实厘米在废钢堆里重新画出被埋住的同类异物，光影锈蚀与车斗一致\n"
-    )
-    if position_hint:
-        fusion_enhance += f"\n【出现位置】异物必须出现在{position_hint}。\n"
-    if orientation_hint:
-        fusion_enhance += f"\n【横放朝向】{orientation_hint}。\n"
-
-    position_head = f"【强制位置】把异物放在{position_hint}。\n\n" if position_hint else ""
-    orientation_head = f"【强制朝向】{orientation_hint}。\n\n" if orientation_hint else ""
-    full_prompt = (
-        f"{position_head}"
-        f"{orientation_head}"
-        f"{prompt}\n\n"
-        f"{fusion_enhance}\n"
-        f"目标异物类别：{object_class}。\n"
-        "不要改变废钢场景、时间戳和摄像头点位文字，不要改变视角，"
-        "不要生成卡通风格，不要生成干净崭新或悬浮的异物，不要偏离该类别的真实尺寸。\n"
-        f"【必须放入】必须把{object_class}放进第1张背景图的指定位置。"
-        "可以小、大部分被遮挡，但必须露出能辨认的一小段。"
-        "禁止省略异物，禁止输出一张与背景图相同的图。"
-        f"多视图里的{object_class}只是外形样本，禁止把它直接插入第1张场景。"
-    )
-    return full_prompt
-
 
 # ============================================================
 #  build_request_payload - 按图像协议组请求（自动压缩到 2K）
@@ -3175,7 +3142,6 @@ def _encode_input_images(image_paths: List[Path]) -> Tuple[List[str], int, int]:
         images.append(f"data:image/jpeg;base64,{b64_data}")
 
     return images, canvas_w, canvas_h
-
 
 def build_request_payload(image_paths: List[Path], prompt: str, cfg: AppConfig) -> Dict[str, Any]:
     """
@@ -3226,39 +3192,6 @@ def build_request_payload(image_paths: List[Path], prompt: str, cfg: AppConfig) 
 
     raise ValueError(f"未知图像协议: {cfg.image_protocol}")
 
-
-def generation_role_prompt(prompt: str, view_count: int = 0, references_weathered: bool = False, reference_kind: str = "six_view_atlas") -> str:
-    """单次调用的文字：只把原始背景当画布；多视图只认外形，禁止当贴图。"""
-    lines = [
-        "第1张图是最初的废钢监控原图，只作为画布。必须在这张图上新增异物。",
-        "废钢场景、时间戳和摄像头文字保持原样，但输出不能与这张背景图相同。",
-        "色温：异物的高光、中间调、阴影与相邻废钢同一白平衡，高光不另加暖黄，阴影不另加青蓝，交界不能有一圈独立色温。",
-        "色调：只看色相和明度，跟相邻废钢，不跳纯色，不加更亮的边。不要在这句里写饱和度。",
-        "饱和度：必须发灰、发浊、蒙尘、褪色，并且明显低于周围废钢。宁可几乎看不出原来的颜色，也不要鲜艳。禁止鲜红、橘红、亮黄、翠绿、纯蓝、荧光色和高饱和色块。商品原色只留一点色相，其余混进灰尘和铁锈灰。",
-        "像素：异物细节必须低于监控原图，颗粒更粗，压缩块更明显，局部对比更低；和原图一样细仍然偏高。",
-        "清晰度：先沿用背景的拍摄晃动。废钢边缘若沿同一方向拉出拖影，异物必须同样拉糊；没有拖影时保持同样失焦。异物不能比废钢更锐。禁止把整张监控图再柔化。",
-        "每一轮都只在这张原始背景上重画，不要使用任何已生成图当作画布。",
-    ]
-    if view_count > 0:
-        lines.extend(
-            [
-                (
-                    f"后面 {view_count} 张是用户提供的生锈六视图，参考几何、零件及既有锈蚀；六格为同一件的六个视角，输出只增加一件。按第1张背景重建光照和接触遮挡，保留旧化，不复制白底或格线。"
-                    if reference_kind == "weathered_six_view_atlas" else
-                    f"后面 {view_count} 张是已生成的废旧状态物品身份参考，只参考几何、零件和旧化材质；必须在第1张原背景内重新画出同一件。"
-                    if references_weathered else
-                    f"后面 {view_count} 张只用来认形状、零件和比例；图中是新品参考，输出必须重新生成已明显旧化的报废状态。不要照抄参考图的鲜艳原色。"
-                ),
-                "多视图只用来认形状、零件和比例，不要照抄参考图的鲜艳原色。不得继承参考图的鲜亮漆面、干净金属面、摄影棚高光、独立白平衡、锐度和标签清晰度；当前监控背景决定外观。",
-                "禁止把参考图里的物体直接抠图、贴图、插入、叠加或原样拷贝进第1张场景。",
-                "禁止保留白底、摄影棚、宫格分割线，以及前、后、左、右、上、下这类视角标签。",
-                "必须按本轮设定尺寸，在废钢堆里重新画出一件被埋住的同类异物，光影和锈蚀跟车斗一致。",
-            ]
-        )
-    lines.append(prompt)
-    return "\n".join(lines)
-
-
 def generate_single_call(
     cfg: AppConfig,
     background_path: Path,
@@ -3277,7 +3210,6 @@ def generate_single_call(
         print(f"  [生图] 第{idx}张参考: {path.name}")
     payload = build_request_payload(image_paths, labeled, cfg)
     return call_image_api(payload, cfg), labeled
-
 
 def prepare_scene_weathered_reference(
     cfg: AppConfig, reference_path: Path, background_path: Path
@@ -3344,7 +3276,6 @@ def prepare_scene_weathered_reference(
     print(f"  [旧化参考] 已生成 {path.name}；最终场景仍需视觉复核")
     return path
 
-
 # ============================================================
 #  call_image_api
 # ============================================================
@@ -3395,7 +3326,6 @@ def call_image_api(payload: Dict[str, Any], cfg: AppConfig) -> Dict[str, Any]:
         print(f"  [API Error] {e}")
         raise
 
-
 # ============================================================
 #  extract_image_urls - 按图像协议解析
 # ============================================================
@@ -3427,20 +3357,17 @@ def extract_image_urls(result: Dict[str, Any], image_protocol: str) -> List[str]
     print(f"  [提取URL] 找到 {len(urls)} 个图片URL")
     return urls
 
-
 def download_image(url: str) -> bytes:
     session = get_session_with_ssl_bypass()
     response = session.get(url, timeout=60)
     response.raise_for_status()
     return response.content
 
-
 def _origin_of(url: str) -> str:
     parsed = urlparse(url)
     if not parsed.scheme or not parsed.netloc:
         raise ValueError(f"无法解析地址: {url}")
     return f"{parsed.scheme}://{parsed.netloc}"
-
 
 def _chat_endpoint(base_url: str) -> str:
     base = base_url.rstrip("/")
@@ -3449,14 +3376,12 @@ def _chat_endpoint(base_url: str) -> str:
         return base
     return base + suffix
 
-
 def load_bailian_raw() -> Dict[str, Any]:
     """中转函数直接读取 config_bailian.yaml。"""
     config_path = Path(__file__).resolve().parent / "config_bailian.yaml"
     print(f"[DEBUG] 读取配置文件: {config_path}")
     print(f"[DEBUG] 配置文件是否存在: {config_path.exists()}")
     return load_yaml_config(config_path)
-
 
 def load_app_raw() -> Dict[str, Any]:
     """读取 config.yaml，用于选择生图模型和 VLM 模型。"""
@@ -3465,18 +3390,15 @@ def load_app_raw() -> Dict[str, Any]:
     print(f"[DEBUG] 应用配置是否存在: {config_path.exists()}")
     return load_yaml_config(config_path)
 
-
 def route_models(raw_bailian: Dict[str, Any], raw_app: Dict[str, Any]) -> Optional[Tuple[str, str]]:
     """系列由入口按模型名决定，这里不再跨家混选。"""
     del raw_bailian, raw_app
     return None
 
-
 def select_models(raw_bailian: Dict[str, Any], raw_app: Dict[str, Any]) -> Tuple[str, str]:
     del raw_bailian, raw_app
     print(f"[DEBUG] 模型来源: {THIS_SERIES} -> {CHOSEN_IMAGE} / {CHOSEN_VLM}")
     return CHOSEN_IMAGE, CHOSEN_VLM
-
 
 def models_for_this_series(image_model: Optional[str], vlm_model: Optional[str]) -> Tuple[str, str]:
     """只接受本系列、并且十一点配置里已经出现过的模型名。"""
@@ -3487,7 +3409,6 @@ def models_for_this_series(image_model: Optional[str], vlm_model: Optional[str])
             f"{THIS_SERIES} 只接受生图 {list(ALLOWED_IMAGES)}，VLM {list(ALLOWED_VLMS)}"
         )
     return image, vlm
-
 
 def bind_by_model(raw: Dict[str, Any], image_model: str, vlm_model: str) -> Dict[str, str]:
     """按模型名绑定密钥、地址和协议。图像与 VLM 互不影响。"""
@@ -3530,7 +3451,6 @@ def bind_by_model(raw: Dict[str, Any], image_model: str, vlm_model: str) -> Dict
         "vlm_api_url": vlm_api_url,
         "vlm_model": vlm_model,
     }
-
 
 def load_app_config() -> AppConfig:
     base_dir = Path(__file__).resolve().parent
@@ -3599,7 +3519,6 @@ def load_app_config() -> AppConfig:
     print(f"[DEBUG] 已加载 {len(cfg.object_resize_scales)} 类物体真实缩放尺寸")
     print(f"[DEBUG] 已加载 {len(cfg.object_size_briefs)} 类物体结构尺寸")
     return cfg
-
 
 # ============ 主函数 ============
 
@@ -4059,7 +3978,6 @@ def main() -> None:
     
     prompt_analyzer.save_stats()
     prompt_analyzer.print_summary()
-
 
 if __name__ == "__main__":
     main()
