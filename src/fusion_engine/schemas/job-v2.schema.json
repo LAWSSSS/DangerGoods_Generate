@@ -1,0 +1,4148 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:scene-fusion:job:2.0",
+  "title": "图像融合任务 v2.0",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "2.0"
+    },
+    "prompt_version": {
+      "enum": [
+        "2.1",
+        "2.2",
+        "2.3",
+        "3.0"
+      ]
+    },
+    "pipeline_version": {
+      "enum": [
+        "2.0",
+        "3.0"
+      ]
+    },
+    "feature_flags": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "v3_layer_compositor": {
+          "type": "boolean"
+        },
+        "v3_mask_refinement": {
+          "type": "boolean"
+        },
+        "v3_interaction_layers": {
+          "type": "boolean"
+        },
+        "v3_diagnostics": {
+          "type": "boolean"
+        },
+        "v3_repair_router": {
+          "type": "boolean"
+        },
+        "v3_structure_preservation": {
+          "type": "boolean"
+        },
+        "v3_causal_iteration": {
+          "type": "boolean"
+        }
+      },
+      "required": []
+    },
+    "fusion_v3": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "allow_proposed_interactions": {
+          "type": "boolean"
+        },
+        "surface_policy": {
+          "enum": [
+            "legacy_fixed",
+            "paired_only"
+          ]
+        },
+        "max_structure_loss_fraction": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 0.1
+        },
+        "shadow_receivers": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+              },
+              "object_id": {
+                "type": "string",
+                "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+              },
+              "receiver": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "path": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "sha256": {
+                    "type": "string",
+                    "pattern": "^[a-f0-9]{64}$"
+                  },
+                  "empty": {
+                    "const": true
+                  },
+                  "polygons": {
+                    "type": "array",
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "array",
+                        "items": {
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 1
+                        },
+                        "minItems": 2,
+                        "maxItems": 2
+                      },
+                      "minItems": 3
+                    },
+                    "minItems": 1
+                  },
+                  "exclude_polygons": {
+                    "type": "array",
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "array",
+                        "items": {
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 1
+                        },
+                        "minItems": 2,
+                        "maxItems": 2
+                      },
+                      "minItems": 3
+                    },
+                    "minItems": 1
+                  },
+                  "coordinate_space": {
+                    "const": "normalized_original_background"
+                  },
+                  "evidence": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "source": {
+                        "enum": [
+                          "human",
+                          "cad",
+                          "calibrated_geometry",
+                          "segmentation_model",
+                          "vlm",
+                          "catalog",
+                          "estimate",
+                          "proposal",
+                          "synthetic_fixture"
+                        ]
+                      },
+                      "confirmed": {
+                        "type": "boolean"
+                      },
+                      "reviewer": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "notes": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "confidence": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 1
+                      }
+                    },
+                    "required": [
+                      "source",
+                      "confirmed",
+                      "notes"
+                    ]
+                  }
+                },
+                "required": [
+                  "evidence"
+                ],
+                "oneOf": [
+                  {
+                    "required": [
+                      "path"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "empty"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "polygons"
+                    ]
+                  }
+                ],
+                "allOf": [
+                  {
+                    "if": {
+                      "required": [
+                        "polygons"
+                      ]
+                    },
+                    "then": {
+                      "required": [
+                        "coordinate_space"
+                      ]
+                    }
+                  },
+                  {
+                    "if": {
+                      "required": [
+                        "sha256"
+                      ]
+                    },
+                    "then": {
+                      "required": [
+                        "path"
+                      ]
+                    }
+                  },
+                  {
+                    "if": {
+                      "required": [
+                        "exclude_polygons"
+                      ]
+                    },
+                    "then": {
+                      "required": [
+                        "polygons"
+                      ]
+                    }
+                  }
+                ]
+              },
+              "allowed": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "path": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "sha256": {
+                    "type": "string",
+                    "pattern": "^[a-f0-9]{64}$"
+                  },
+                  "empty": {
+                    "const": true
+                  },
+                  "polygons": {
+                    "type": "array",
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "array",
+                        "items": {
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 1
+                        },
+                        "minItems": 2,
+                        "maxItems": 2
+                      },
+                      "minItems": 3
+                    },
+                    "minItems": 1
+                  },
+                  "exclude_polygons": {
+                    "type": "array",
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "array",
+                        "items": {
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 1
+                        },
+                        "minItems": 2,
+                        "maxItems": 2
+                      },
+                      "minItems": 3
+                    },
+                    "minItems": 1
+                  },
+                  "coordinate_space": {
+                    "const": "normalized_original_background"
+                  },
+                  "evidence": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "source": {
+                        "enum": [
+                          "human",
+                          "cad",
+                          "calibrated_geometry",
+                          "segmentation_model",
+                          "vlm",
+                          "catalog",
+                          "estimate",
+                          "proposal",
+                          "synthetic_fixture"
+                        ]
+                      },
+                      "confirmed": {
+                        "type": "boolean"
+                      },
+                      "reviewer": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "notes": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "confidence": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 1
+                      }
+                    },
+                    "required": [
+                      "source",
+                      "confirmed",
+                      "notes"
+                    ]
+                  }
+                },
+                "required": [
+                  "evidence"
+                ],
+                "oneOf": [
+                  {
+                    "required": [
+                      "path"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "empty"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "polygons"
+                    ]
+                  }
+                ],
+                "allOf": [
+                  {
+                    "if": {
+                      "required": [
+                        "polygons"
+                      ]
+                    },
+                    "then": {
+                      "required": [
+                        "coordinate_space"
+                      ]
+                    }
+                  },
+                  {
+                    "if": {
+                      "required": [
+                        "sha256"
+                      ]
+                    },
+                    "then": {
+                      "required": [
+                        "path"
+                      ]
+                    }
+                  },
+                  {
+                    "if": {
+                      "required": [
+                        "exclude_polygons"
+                      ]
+                    },
+                    "then": {
+                      "required": [
+                        "polygons"
+                      ]
+                    }
+                  }
+                ]
+              },
+              "surface_kind": {
+                "enum": [
+                  "locally_planar",
+                  "complex",
+                  "unknown"
+                ]
+              }
+            },
+            "required": [
+              "id",
+              "object_id",
+              "receiver",
+              "allowed",
+              "surface_kind"
+            ]
+          },
+          "minItems": 0,
+          "maxItems": 24
+        },
+        "shadow": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "max_darkening": {
+              "type": "number",
+              "minimum": 0.01,
+              "maximum": 0.4
+            },
+            "min_darkening": {
+              "type": "number",
+              "minimum": 0.001,
+              "maximum": 0.1
+            },
+            "max_chromatic_error": {
+              "type": "number",
+              "minimum": 0.001,
+              "maximum": 0.1
+            },
+            "max_texture_log_error": {
+              "type": "number",
+              "minimum": 0.001,
+              "maximum": 0.3
+            },
+            "min_valid_pixels": {
+              "type": "integer",
+              "minimum": 32,
+              "maximum": 100000
+            },
+            "min_valid_fraction": {
+              "type": "number",
+              "minimum": 0.1,
+              "maximum": 1
+            },
+            "min_component_pixels": {
+              "type": "integer",
+              "minimum": 4,
+              "maximum": 1024
+            }
+          },
+          "required": []
+        }
+      },
+      "required": []
+    },
+    "task_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+    },
+    "workspace": {
+      "type": "string",
+      "minLength": 1
+    },
+    "mode": {
+      "enum": [
+        "A",
+        "B",
+        "C"
+      ]
+    },
+    "background": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "width": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "height": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "protect": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "path": {
+              "type": "string",
+              "minLength": 1
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "empty": {
+              "const": true
+            },
+            "polygons": {
+              "type": "array",
+              "items": {
+                "type": "array",
+                "items": {
+                  "type": "array",
+                  "items": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  },
+                  "minItems": 2,
+                  "maxItems": 2
+                },
+                "minItems": 3
+              },
+              "minItems": 1
+            },
+            "exclude_polygons": {
+              "type": "array",
+              "items": {
+                "type": "array",
+                "items": {
+                  "type": "array",
+                  "items": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  },
+                  "minItems": 2,
+                  "maxItems": 2
+                },
+                "minItems": 3
+              },
+              "minItems": 1
+            },
+            "coordinate_space": {
+              "const": "normalized_original_background"
+            },
+            "evidence": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "source": {
+                  "enum": [
+                    "human",
+                    "cad",
+                    "calibrated_geometry",
+                    "segmentation_model",
+                    "vlm",
+                    "catalog",
+                    "estimate",
+                    "proposal",
+                    "synthetic_fixture"
+                  ]
+                },
+                "confirmed": {
+                  "type": "boolean"
+                },
+                "reviewer": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "notes": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "confidence": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                }
+              },
+              "required": [
+                "source",
+                "confirmed",
+                "notes"
+              ]
+            }
+          },
+          "required": [
+            "evidence"
+          ],
+          "oneOf": [
+            {
+              "required": [
+                "path"
+              ]
+            },
+            {
+              "required": [
+                "empty"
+              ]
+            },
+            {
+              "required": [
+                "polygons"
+              ]
+            }
+          ],
+          "allOf": [
+            {
+              "if": {
+                "required": [
+                  "polygons"
+                ]
+              },
+              "then": {
+                "required": [
+                  "coordinate_space"
+                ]
+              }
+            },
+            {
+              "if": {
+                "required": [
+                  "sha256"
+                ]
+              },
+              "then": {
+                "required": [
+                  "path"
+                ]
+              }
+            },
+            {
+              "if": {
+                "required": [
+                  "exclude_polygons"
+                ]
+              },
+              "then": {
+                "required": [
+                  "polygons"
+                ]
+              }
+            }
+          ]
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "path"
+      ]
+    },
+    "objects": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+          },
+          "category": {
+            "type": "string",
+            "minLength": 1
+          },
+          "references": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "path": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "view_id": {
+                  "type": "string",
+                  "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+                },
+                "sha256": {
+                  "type": "string",
+                  "pattern": "^[a-f0-9]{64}$"
+                },
+                "orientation_hint": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "complete": {
+                  "type": "boolean"
+                },
+                "source_kind": {
+                  "enum": [
+                    "photo",
+                    "atlas",
+                    "rusted_atlas",
+                    "cad"
+                  ]
+                }
+              },
+              "required": [
+                "path",
+                "view_id",
+                "source_kind"
+              ]
+            },
+            "minItems": 1,
+            "maxItems": 8
+          },
+          "dimensions": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "status": {
+                "enum": [
+                  "measured",
+                  "catalog_verified",
+                  "estimated",
+                  "unknown"
+                ]
+              },
+              "units": {
+                "enum": [
+                  "mm",
+                  "cm",
+                  "m"
+                ]
+              },
+              "values": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "number",
+                  "minimum": 1e-06
+                }
+              },
+              "ranges": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "array",
+                  "items": {
+                    "type": "number",
+                    "minimum": 1e-06
+                  },
+                  "minItems": 2,
+                  "maxItems": 2
+                }
+              },
+              "evidence": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "source": {
+                    "enum": [
+                      "human",
+                      "cad",
+                      "calibrated_geometry",
+                      "segmentation_model",
+                      "vlm",
+                      "catalog",
+                      "estimate",
+                      "proposal",
+                      "synthetic_fixture"
+                    ]
+                  },
+                  "confirmed": {
+                    "type": "boolean"
+                  },
+                  "reviewer": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "notes": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "confidence": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  }
+                },
+                "required": [
+                  "source",
+                  "confirmed",
+                  "notes"
+                ]
+              }
+            },
+            "required": [
+              "status",
+              "units",
+              "evidence"
+            ]
+          },
+          "identity": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "level": {
+                "enum": [
+                  "category",
+                  "instance"
+                ]
+              },
+              "critical_parts": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "minItems": 0
+              },
+              "positive": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "minItems": 0
+              },
+              "negative": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "minItems": 0
+              }
+            },
+            "required": [
+              "level",
+              "critical_parts",
+              "positive",
+              "negative"
+            ]
+          },
+          "material_parts": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+                },
+                "base_material": {
+                  "enum": [
+                    "carbon_steel",
+                    "painted_steel",
+                    "cast_iron",
+                    "stainless_steel",
+                    "aluminium",
+                    "galvanized_steel",
+                    "copper",
+                    "brass",
+                    "plastic",
+                    "rubber",
+                    "wood",
+                    "paper",
+                    "glass",
+                    "fabric",
+                    "ceramic",
+                    "unknown"
+                  ]
+                },
+                "coating": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "evidence": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "source": {
+                      "enum": [
+                        "human",
+                        "cad",
+                        "calibrated_geometry",
+                        "segmentation_model",
+                        "vlm",
+                        "catalog",
+                        "estimate",
+                        "proposal",
+                        "synthetic_fixture"
+                      ]
+                    },
+                    "confirmed": {
+                      "type": "boolean"
+                    },
+                    "reviewer": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "notes": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "confidence": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1
+                    }
+                  },
+                  "required": [
+                    "source",
+                    "confirmed",
+                    "notes"
+                  ]
+                },
+                "critical": {
+                  "type": "boolean"
+                },
+                "weathering_locations": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "minItems": 0
+                },
+                "allowed_damage": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "minItems": 0
+                }
+              },
+              "required": [
+                "id",
+                "base_material",
+                "evidence"
+              ]
+            },
+            "minItems": 1
+          },
+          "ageing": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "level": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 4
+              },
+              "exposure_history": {
+                "type": "string",
+                "minLength": 1
+              },
+              "allow_structural_damage": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "level",
+              "exposure_history",
+              "allow_structural_damage"
+            ]
+          },
+          "placement": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "box_type": {
+                "const": "oriented"
+              },
+              "coordinate_space": {
+                "const": "normalized_original_background"
+              },
+              "center": {
+                "type": "array",
+                "items": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "width": {
+                "type": "number",
+                "minimum": 1e-06,
+                "maximum": 1
+              },
+              "height": {
+                "type": "number",
+                "minimum": 1e-06,
+                "maximum": 1
+              },
+              "rotation_deg": {
+                "type": "number",
+                "minimum": -180,
+                "maximum": 180
+              },
+              "allow_crop": {
+                "type": "boolean"
+              },
+              "status": {
+                "enum": [
+                  "proposed",
+                  "confirmed"
+                ]
+              },
+              "evidence": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "source": {
+                    "enum": [
+                      "human",
+                      "cad",
+                      "calibrated_geometry",
+                      "segmentation_model",
+                      "vlm",
+                      "catalog",
+                      "estimate",
+                      "proposal",
+                      "synthetic_fixture"
+                    ]
+                  },
+                  "confirmed": {
+                    "type": "boolean"
+                  },
+                  "reviewer": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "notes": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "confidence": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  }
+                },
+                "required": [
+                  "source",
+                  "confirmed",
+                  "notes"
+                ]
+              },
+              "scale": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "level": {
+                    "enum": [
+                      0,
+                      1,
+                      2,
+                      3
+                    ]
+                  },
+                  "evidence": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "source": {
+                        "enum": [
+                          "human",
+                          "cad",
+                          "calibrated_geometry",
+                          "segmentation_model",
+                          "vlm",
+                          "catalog",
+                          "estimate",
+                          "proposal",
+                          "synthetic_fixture"
+                        ]
+                      },
+                      "confirmed": {
+                        "type": "boolean"
+                      },
+                      "reviewer": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "notes": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "confidence": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 1
+                      }
+                    },
+                    "required": [
+                      "source",
+                      "confirmed",
+                      "notes"
+                    ]
+                  },
+                  "reference_projection": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "reference_pixels": {
+                        "type": "number",
+                        "minimum": 0.001
+                      },
+                      "object_length": {
+                        "type": "number",
+                        "minimum": 0.001
+                      },
+                      "reference_length": {
+                        "type": "number",
+                        "minimum": 0.001
+                      },
+                      "units": {
+                        "enum": [
+                          "mm",
+                          "cm",
+                          "m"
+                        ]
+                      },
+                      "depth_ratio_range": {
+                        "type": "array",
+                        "items": {
+                          "type": "number",
+                          "minimum": 0.001
+                        },
+                        "minItems": 2,
+                        "maxItems": 2
+                      },
+                      "foreshortening_ratio_range": {
+                        "type": "array",
+                        "items": {
+                          "type": "number",
+                          "minimum": 0.001
+                        },
+                        "minItems": 2,
+                        "maxItems": 2
+                      }
+                    },
+                    "required": [
+                      "reference_pixels",
+                      "object_length",
+                      "reference_length",
+                      "units"
+                    ]
+                  },
+                  "pixel_length_range": {
+                    "type": "array",
+                    "items": {
+                      "type": "number",
+                      "minimum": 0.001
+                    },
+                    "minItems": 2,
+                    "maxItems": 2
+                  },
+                  "assumptions": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "minItems": 0
+                  },
+                  "camera": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "K": {
+                        "type": "array",
+                        "items": {
+                          "type": "array",
+                          "items": {
+                            "type": "number"
+                          },
+                          "minItems": 3,
+                          "maxItems": 3
+                        },
+                        "minItems": 3,
+                        "maxItems": 3
+                      },
+                      "R": {
+                        "type": "array",
+                        "items": {
+                          "type": "array",
+                          "items": {
+                            "type": "number"
+                          },
+                          "minItems": 3,
+                          "maxItems": 3
+                        },
+                        "minItems": 3,
+                        "maxItems": 3
+                      },
+                      "t": {
+                        "type": "array",
+                        "items": {
+                          "type": "number"
+                        },
+                        "minItems": 3,
+                        "maxItems": 3
+                      },
+                      "points_3d": {
+                        "type": "array",
+                        "items": {
+                          "type": "array",
+                          "items": {
+                            "type": "number"
+                          },
+                          "minItems": 3,
+                          "maxItems": 3
+                        },
+                        "minItems": 4
+                      },
+                      "units": {
+                        "enum": [
+                          "mm",
+                          "cm",
+                          "m"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "K",
+                      "R",
+                      "t",
+                      "points_3d",
+                      "units"
+                    ]
+                  }
+                },
+                "required": [
+                  "level",
+                  "evidence"
+                ]
+              },
+              "pose_3d_notes": {
+                "type": "string",
+                "minLength": 1
+              },
+              "priority": {
+                "enum": [
+                  "fixed",
+                  "support_first"
+                ]
+              },
+              "flexibility": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "max_center_shift": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 0.05
+                  },
+                  "scale_range": {
+                    "type": "array",
+                    "items": {
+                      "type": "number",
+                      "minimum": 0.75,
+                      "maximum": 1.25
+                    },
+                    "minItems": 2,
+                    "maxItems": 2
+                  },
+                  "max_rotation_delta_deg": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 45
+                  }
+                },
+                "required": [
+                  "max_center_shift",
+                  "scale_range",
+                  "max_rotation_delta_deg"
+                ]
+              }
+            },
+            "required": [
+              "box_type",
+              "coordinate_space",
+              "center",
+              "width",
+              "height",
+              "rotation_deg",
+              "status",
+              "evidence",
+              "scale"
+            ]
+          },
+          "masks": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "obj_full": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "path": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "sha256": {
+                    "type": "string",
+                    "pattern": "^[a-f0-9]{64}$"
+                  },
+                  "empty": {
+                    "const": true
+                  },
+                  "polygons": {
+                    "type": "array",
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "array",
+                        "items": {
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 1
+                        },
+                        "minItems": 2,
+                        "maxItems": 2
+                      },
+                      "minItems": 3
+                    },
+                    "minItems": 1
+                  },
+                  "exclude_polygons": {
+                    "type": "array",
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "array",
+                        "items": {
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 1
+                        },
+                        "minItems": 2,
+                        "maxItems": 2
+                      },
+                      "minItems": 3
+                    },
+                    "minItems": 1
+                  },
+                  "coordinate_space": {
+                    "const": "normalized_original_background"
+                  },
+                  "evidence": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "source": {
+                        "enum": [
+                          "human",
+                          "cad",
+                          "calibrated_geometry",
+                          "segmentation_model",
+                          "vlm",
+                          "catalog",
+                          "estimate",
+                          "proposal",
+                          "synthetic_fixture"
+                        ]
+                      },
+                      "confirmed": {
+                        "type": "boolean"
+                      },
+                      "reviewer": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "notes": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "confidence": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 1
+                      }
+                    },
+                    "required": [
+                      "source",
+                      "confirmed",
+                      "notes"
+                    ]
+                  }
+                },
+                "required": [
+                  "evidence"
+                ],
+                "oneOf": [
+                  {
+                    "required": [
+                      "path"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "empty"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "polygons"
+                    ]
+                  }
+                ],
+                "allOf": [
+                  {
+                    "if": {
+                      "required": [
+                        "polygons"
+                      ]
+                    },
+                    "then": {
+                      "required": [
+                        "coordinate_space"
+                      ]
+                    }
+                  },
+                  {
+                    "if": {
+                      "required": [
+                        "sha256"
+                      ]
+                    },
+                    "then": {
+                      "required": [
+                        "path"
+                      ]
+                    }
+                  },
+                  {
+                    "if": {
+                      "required": [
+                        "exclude_polygons"
+                      ]
+                    },
+                    "then": {
+                      "required": [
+                        "polygons"
+                      ]
+                    }
+                  }
+                ]
+              },
+              "fg_occ": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "path": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "sha256": {
+                    "type": "string",
+                    "pattern": "^[a-f0-9]{64}$"
+                  },
+                  "empty": {
+                    "const": true
+                  },
+                  "polygons": {
+                    "type": "array",
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "array",
+                        "items": {
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 1
+                        },
+                        "minItems": 2,
+                        "maxItems": 2
+                      },
+                      "minItems": 3
+                    },
+                    "minItems": 1
+                  },
+                  "exclude_polygons": {
+                    "type": "array",
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "array",
+                        "items": {
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 1
+                        },
+                        "minItems": 2,
+                        "maxItems": 2
+                      },
+                      "minItems": 3
+                    },
+                    "minItems": 1
+                  },
+                  "coordinate_space": {
+                    "const": "normalized_original_background"
+                  },
+                  "evidence": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "source": {
+                        "enum": [
+                          "human",
+                          "cad",
+                          "calibrated_geometry",
+                          "segmentation_model",
+                          "vlm",
+                          "catalog",
+                          "estimate",
+                          "proposal",
+                          "synthetic_fixture"
+                        ]
+                      },
+                      "confirmed": {
+                        "type": "boolean"
+                      },
+                      "reviewer": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "notes": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "confidence": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 1
+                      }
+                    },
+                    "required": [
+                      "source",
+                      "confirmed",
+                      "notes"
+                    ]
+                  }
+                },
+                "required": [
+                  "evidence"
+                ],
+                "oneOf": [
+                  {
+                    "required": [
+                      "path"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "empty"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "polygons"
+                    ]
+                  }
+                ],
+                "allOf": [
+                  {
+                    "if": {
+                      "required": [
+                        "polygons"
+                      ]
+                    },
+                    "then": {
+                      "required": [
+                        "coordinate_space"
+                      ]
+                    }
+                  },
+                  {
+                    "if": {
+                      "required": [
+                        "sha256"
+                      ]
+                    },
+                    "then": {
+                      "required": [
+                        "path"
+                      ]
+                    }
+                  },
+                  {
+                    "if": {
+                      "required": [
+                        "exclude_polygons"
+                      ]
+                    },
+                    "then": {
+                      "required": [
+                        "polygons"
+                      ]
+                    }
+                  }
+                ]
+              },
+              "contact": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "path": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "sha256": {
+                    "type": "string",
+                    "pattern": "^[a-f0-9]{64}$"
+                  },
+                  "empty": {
+                    "const": true
+                  },
+                  "polygons": {
+                    "type": "array",
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "array",
+                        "items": {
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 1
+                        },
+                        "minItems": 2,
+                        "maxItems": 2
+                      },
+                      "minItems": 3
+                    },
+                    "minItems": 1
+                  },
+                  "exclude_polygons": {
+                    "type": "array",
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "array",
+                        "items": {
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 1
+                        },
+                        "minItems": 2,
+                        "maxItems": 2
+                      },
+                      "minItems": 3
+                    },
+                    "minItems": 1
+                  },
+                  "coordinate_space": {
+                    "const": "normalized_original_background"
+                  },
+                  "evidence": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "source": {
+                        "enum": [
+                          "human",
+                          "cad",
+                          "calibrated_geometry",
+                          "segmentation_model",
+                          "vlm",
+                          "catalog",
+                          "estimate",
+                          "proposal",
+                          "synthetic_fixture"
+                        ]
+                      },
+                      "confirmed": {
+                        "type": "boolean"
+                      },
+                      "reviewer": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "notes": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "confidence": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 1
+                      }
+                    },
+                    "required": [
+                      "source",
+                      "confirmed",
+                      "notes"
+                    ]
+                  }
+                },
+                "required": [
+                  "evidence"
+                ],
+                "oneOf": [
+                  {
+                    "required": [
+                      "path"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "empty"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "polygons"
+                    ]
+                  }
+                ],
+                "allOf": [
+                  {
+                    "if": {
+                      "required": [
+                        "polygons"
+                      ]
+                    },
+                    "then": {
+                      "required": [
+                        "coordinate_space"
+                      ]
+                    }
+                  },
+                  {
+                    "if": {
+                      "required": [
+                        "sha256"
+                      ]
+                    },
+                    "then": {
+                      "required": [
+                        "path"
+                      ]
+                    }
+                  },
+                  {
+                    "if": {
+                      "required": [
+                        "exclude_polygons"
+                      ]
+                    },
+                    "then": {
+                      "required": [
+                        "polygons"
+                      ]
+                    }
+                  }
+                ]
+              },
+              "edit": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "path": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "sha256": {
+                    "type": "string",
+                    "pattern": "^[a-f0-9]{64}$"
+                  },
+                  "empty": {
+                    "const": true
+                  },
+                  "polygons": {
+                    "type": "array",
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "array",
+                        "items": {
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 1
+                        },
+                        "minItems": 2,
+                        "maxItems": 2
+                      },
+                      "minItems": 3
+                    },
+                    "minItems": 1
+                  },
+                  "exclude_polygons": {
+                    "type": "array",
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "array",
+                        "items": {
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 1
+                        },
+                        "minItems": 2,
+                        "maxItems": 2
+                      },
+                      "minItems": 3
+                    },
+                    "minItems": 1
+                  },
+                  "coordinate_space": {
+                    "const": "normalized_original_background"
+                  },
+                  "evidence": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "source": {
+                        "enum": [
+                          "human",
+                          "cad",
+                          "calibrated_geometry",
+                          "segmentation_model",
+                          "vlm",
+                          "catalog",
+                          "estimate",
+                          "proposal",
+                          "synthetic_fixture"
+                        ]
+                      },
+                      "confirmed": {
+                        "type": "boolean"
+                      },
+                      "reviewer": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "notes": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "confidence": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 1
+                      }
+                    },
+                    "required": [
+                      "source",
+                      "confirmed",
+                      "notes"
+                    ]
+                  }
+                },
+                "required": [
+                  "evidence"
+                ],
+                "oneOf": [
+                  {
+                    "required": [
+                      "path"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "empty"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "polygons"
+                    ]
+                  }
+                ],
+                "allOf": [
+                  {
+                    "if": {
+                      "required": [
+                        "polygons"
+                      ]
+                    },
+                    "then": {
+                      "required": [
+                        "coordinate_space"
+                      ]
+                    }
+                  },
+                  {
+                    "if": {
+                      "required": [
+                        "sha256"
+                      ]
+                    },
+                    "then": {
+                      "required": [
+                        "path"
+                      ]
+                    }
+                  },
+                  {
+                    "if": {
+                      "required": [
+                        "exclude_polygons"
+                      ]
+                    },
+                    "then": {
+                      "required": [
+                        "polygons"
+                      ]
+                    }
+                  }
+                ]
+              },
+              "protect": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "path": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "sha256": {
+                    "type": "string",
+                    "pattern": "^[a-f0-9]{64}$"
+                  },
+                  "empty": {
+                    "const": true
+                  },
+                  "polygons": {
+                    "type": "array",
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "array",
+                        "items": {
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 1
+                        },
+                        "minItems": 2,
+                        "maxItems": 2
+                      },
+                      "minItems": 3
+                    },
+                    "minItems": 1
+                  },
+                  "exclude_polygons": {
+                    "type": "array",
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "array",
+                        "items": {
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 1
+                        },
+                        "minItems": 2,
+                        "maxItems": 2
+                      },
+                      "minItems": 3
+                    },
+                    "minItems": 1
+                  },
+                  "coordinate_space": {
+                    "const": "normalized_original_background"
+                  },
+                  "evidence": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "source": {
+                        "enum": [
+                          "human",
+                          "cad",
+                          "calibrated_geometry",
+                          "segmentation_model",
+                          "vlm",
+                          "catalog",
+                          "estimate",
+                          "proposal",
+                          "synthetic_fixture"
+                        ]
+                      },
+                      "confirmed": {
+                        "type": "boolean"
+                      },
+                      "reviewer": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "notes": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "confidence": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 1
+                      }
+                    },
+                    "required": [
+                      "source",
+                      "confirmed",
+                      "notes"
+                    ]
+                  }
+                },
+                "required": [
+                  "evidence"
+                ],
+                "oneOf": [
+                  {
+                    "required": [
+                      "path"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "empty"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "polygons"
+                    ]
+                  }
+                ],
+                "allOf": [
+                  {
+                    "if": {
+                      "required": [
+                        "polygons"
+                      ]
+                    },
+                    "then": {
+                      "required": [
+                        "coordinate_space"
+                      ]
+                    }
+                  },
+                  {
+                    "if": {
+                      "required": [
+                        "sha256"
+                      ]
+                    },
+                    "then": {
+                      "required": [
+                        "path"
+                      ]
+                    }
+                  },
+                  {
+                    "if": {
+                      "required": [
+                        "exclude_polygons"
+                      ]
+                    },
+                    "then": {
+                      "required": [
+                        "polygons"
+                      ]
+                    }
+                  }
+                ]
+              }
+            },
+            "required": []
+          },
+          "support_contacts": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "support_id": {
+                  "type": "string",
+                  "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+                },
+                "point": {
+                  "type": "array",
+                  "items": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  },
+                  "minItems": 2,
+                  "maxItems": 2
+                },
+                "normal_image": {
+                  "type": "array",
+                  "items": {
+                    "type": "number"
+                  },
+                  "minItems": 2,
+                  "maxItems": 2
+                },
+                "evidence": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "source": {
+                      "enum": [
+                        "human",
+                        "cad",
+                        "calibrated_geometry",
+                        "segmentation_model",
+                        "vlm",
+                        "catalog",
+                        "estimate",
+                        "proposal",
+                        "synthetic_fixture"
+                      ]
+                    },
+                    "confirmed": {
+                      "type": "boolean"
+                    },
+                    "reviewer": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "notes": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "confidence": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1
+                    }
+                  },
+                  "required": [
+                    "source",
+                    "confirmed",
+                    "notes"
+                  ]
+                }
+              },
+              "required": [
+                "support_id",
+                "point",
+                "evidence"
+              ]
+            },
+            "minItems": 0
+          },
+          "center_of_mass_projection": {
+            "type": "array",
+            "items": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "minItems": 2,
+            "maxItems": 2
+          },
+          "stability_evidence": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "source": {
+                "enum": [
+                  "human",
+                  "cad",
+                  "calibrated_geometry",
+                  "segmentation_model",
+                  "vlm",
+                  "catalog",
+                  "estimate",
+                  "proposal",
+                  "synthetic_fixture"
+                ]
+              },
+              "confirmed": {
+                "type": "boolean"
+              },
+              "reviewer": {
+                "type": "string",
+                "minLength": 1
+              },
+              "notes": {
+                "type": "string",
+                "minLength": 1
+              },
+              "confidence": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              }
+            },
+            "required": [
+              "source",
+              "confirmed",
+              "notes"
+            ]
+          },
+          "render_class": {
+            "enum": [
+              "opaque_rigid",
+              "transparent",
+              "soft_body"
+            ]
+          },
+          "spatial_constraints": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "forbidden": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "path": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "sha256": {
+                    "type": "string",
+                    "pattern": "^[a-f0-9]{64}$"
+                  },
+                  "empty": {
+                    "const": true
+                  },
+                  "polygons": {
+                    "type": "array",
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "array",
+                        "items": {
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 1
+                        },
+                        "minItems": 2,
+                        "maxItems": 2
+                      },
+                      "minItems": 3
+                    },
+                    "minItems": 1
+                  },
+                  "exclude_polygons": {
+                    "type": "array",
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "array",
+                        "items": {
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 1
+                        },
+                        "minItems": 2,
+                        "maxItems": 2
+                      },
+                      "minItems": 3
+                    },
+                    "minItems": 1
+                  },
+                  "coordinate_space": {
+                    "const": "normalized_original_background"
+                  },
+                  "evidence": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "source": {
+                        "enum": [
+                          "human",
+                          "cad",
+                          "calibrated_geometry",
+                          "segmentation_model",
+                          "vlm",
+                          "catalog",
+                          "estimate",
+                          "proposal",
+                          "synthetic_fixture"
+                        ]
+                      },
+                      "confirmed": {
+                        "type": "boolean"
+                      },
+                      "reviewer": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "notes": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "confidence": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 1
+                      }
+                    },
+                    "required": [
+                      "source",
+                      "confirmed",
+                      "notes"
+                    ]
+                  }
+                },
+                "required": [
+                  "evidence"
+                ],
+                "oneOf": [
+                  {
+                    "required": [
+                      "path"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "empty"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "polygons"
+                    ]
+                  }
+                ],
+                "allOf": [
+                  {
+                    "if": {
+                      "required": [
+                        "polygons"
+                      ]
+                    },
+                    "then": {
+                      "required": [
+                        "coordinate_space"
+                      ]
+                    }
+                  },
+                  {
+                    "if": {
+                      "required": [
+                        "sha256"
+                      ]
+                    },
+                    "then": {
+                      "required": [
+                        "path"
+                      ]
+                    }
+                  },
+                  {
+                    "if": {
+                      "required": [
+                        "exclude_polygons"
+                      ]
+                    },
+                    "then": {
+                      "required": [
+                        "polygons"
+                      ]
+                    }
+                  }
+                ]
+              },
+              "edit_envelope": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "path": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "sha256": {
+                    "type": "string",
+                    "pattern": "^[a-f0-9]{64}$"
+                  },
+                  "empty": {
+                    "const": true
+                  },
+                  "polygons": {
+                    "type": "array",
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "array",
+                        "items": {
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 1
+                        },
+                        "minItems": 2,
+                        "maxItems": 2
+                      },
+                      "minItems": 3
+                    },
+                    "minItems": 1
+                  },
+                  "exclude_polygons": {
+                    "type": "array",
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "array",
+                        "items": {
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 1
+                        },
+                        "minItems": 2,
+                        "maxItems": 2
+                      },
+                      "minItems": 3
+                    },
+                    "minItems": 1
+                  },
+                  "coordinate_space": {
+                    "const": "normalized_original_background"
+                  },
+                  "evidence": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "source": {
+                        "enum": [
+                          "human",
+                          "cad",
+                          "calibrated_geometry",
+                          "segmentation_model",
+                          "vlm",
+                          "catalog",
+                          "estimate",
+                          "proposal",
+                          "synthetic_fixture"
+                        ]
+                      },
+                      "confirmed": {
+                        "type": "boolean"
+                      },
+                      "reviewer": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "notes": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "confidence": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 1
+                      }
+                    },
+                    "required": [
+                      "source",
+                      "confirmed",
+                      "notes"
+                    ]
+                  }
+                },
+                "required": [
+                  "evidence"
+                ],
+                "oneOf": [
+                  {
+                    "required": [
+                      "path"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "empty"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "polygons"
+                    ]
+                  }
+                ],
+                "allOf": [
+                  {
+                    "if": {
+                      "required": [
+                        "polygons"
+                      ]
+                    },
+                    "then": {
+                      "required": [
+                        "coordinate_space"
+                      ]
+                    }
+                  },
+                  {
+                    "if": {
+                      "required": [
+                        "sha256"
+                      ]
+                    },
+                    "then": {
+                      "required": [
+                        "path"
+                      ]
+                    }
+                  },
+                  {
+                    "if": {
+                      "required": [
+                        "exclude_polygons"
+                      ]
+                    },
+                    "then": {
+                      "required": [
+                        "polygons"
+                      ]
+                    }
+                  }
+                ]
+              },
+              "occluded_fraction_range": {
+                "type": "array",
+                "items": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "minimum_contact_count": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 12
+              }
+            },
+            "required": []
+          },
+          "prompt_directives": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "appearance": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "minItems": 0
+              },
+              "contact": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "minItems": 0
+              },
+              "occlusion": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "minItems": 0
+              },
+              "identity": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "minItems": 0
+              }
+            },
+            "required": []
+          }
+        },
+        "required": [
+          "id",
+          "category",
+          "references",
+          "dimensions",
+          "identity",
+          "material_parts",
+          "ageing",
+          "placement",
+          "masks",
+          "support_contacts",
+          "render_class"
+        ]
+      },
+      "minItems": 1,
+      "maxItems": 12
+    },
+    "scene": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "lighting": {
+          "type": "string",
+          "minLength": 1
+        },
+        "camera_style": {
+          "type": "string",
+          "minLength": 1
+        },
+        "gravity_image_direction": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 2,
+          "maxItems": 2
+        },
+        "evidence": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "source": {
+              "enum": [
+                "human",
+                "cad",
+                "calibrated_geometry",
+                "segmentation_model",
+                "vlm",
+                "catalog",
+                "estimate",
+                "proposal",
+                "synthetic_fixture"
+              ]
+            },
+            "confirmed": {
+              "type": "boolean"
+            },
+            "reviewer": {
+              "type": "string",
+              "minLength": 1
+            },
+            "notes": {
+              "type": "string",
+              "minLength": 1
+            },
+            "confidence": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            }
+          },
+          "required": [
+            "source",
+            "confirmed",
+            "notes"
+          ]
+        },
+        "support_regions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+              },
+              "mask": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "path": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "sha256": {
+                    "type": "string",
+                    "pattern": "^[a-f0-9]{64}$"
+                  },
+                  "empty": {
+                    "const": true
+                  },
+                  "polygons": {
+                    "type": "array",
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "array",
+                        "items": {
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 1
+                        },
+                        "minItems": 2,
+                        "maxItems": 2
+                      },
+                      "minItems": 3
+                    },
+                    "minItems": 1
+                  },
+                  "exclude_polygons": {
+                    "type": "array",
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "array",
+                        "items": {
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 1
+                        },
+                        "minItems": 2,
+                        "maxItems": 2
+                      },
+                      "minItems": 3
+                    },
+                    "minItems": 1
+                  },
+                  "coordinate_space": {
+                    "const": "normalized_original_background"
+                  },
+                  "evidence": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "source": {
+                        "enum": [
+                          "human",
+                          "cad",
+                          "calibrated_geometry",
+                          "segmentation_model",
+                          "vlm",
+                          "catalog",
+                          "estimate",
+                          "proposal",
+                          "synthetic_fixture"
+                        ]
+                      },
+                      "confirmed": {
+                        "type": "boolean"
+                      },
+                      "reviewer": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "notes": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "confidence": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 1
+                      }
+                    },
+                    "required": [
+                      "source",
+                      "confirmed",
+                      "notes"
+                    ]
+                  }
+                },
+                "required": [
+                  "evidence"
+                ],
+                "oneOf": [
+                  {
+                    "required": [
+                      "path"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "empty"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "polygons"
+                    ]
+                  }
+                ],
+                "allOf": [
+                  {
+                    "if": {
+                      "required": [
+                        "polygons"
+                      ]
+                    },
+                    "then": {
+                      "required": [
+                        "coordinate_space"
+                      ]
+                    }
+                  },
+                  {
+                    "if": {
+                      "required": [
+                        "sha256"
+                      ]
+                    },
+                    "then": {
+                      "required": [
+                        "path"
+                      ]
+                    }
+                  },
+                  {
+                    "if": {
+                      "required": [
+                        "exclude_polygons"
+                      ]
+                    },
+                    "then": {
+                      "required": [
+                        "polygons"
+                      ]
+                    }
+                  }
+                ]
+              },
+              "load_bearing": {
+                "enum": [
+                  "confirmed",
+                  "unknown",
+                  "unsafe"
+                ]
+              },
+              "description": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "id",
+              "mask",
+              "load_bearing",
+              "description"
+            ]
+          },
+          "minItems": 0
+        },
+        "occlusion_edges": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "front_id": {
+                "type": "string",
+                "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+              },
+              "back_id": {
+                "type": "string",
+                "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+              },
+              "region": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "path": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "sha256": {
+                    "type": "string",
+                    "pattern": "^[a-f0-9]{64}$"
+                  },
+                  "empty": {
+                    "const": true
+                  },
+                  "polygons": {
+                    "type": "array",
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "array",
+                        "items": {
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 1
+                        },
+                        "minItems": 2,
+                        "maxItems": 2
+                      },
+                      "minItems": 3
+                    },
+                    "minItems": 1
+                  },
+                  "exclude_polygons": {
+                    "type": "array",
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "array",
+                        "items": {
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 1
+                        },
+                        "minItems": 2,
+                        "maxItems": 2
+                      },
+                      "minItems": 3
+                    },
+                    "minItems": 1
+                  },
+                  "coordinate_space": {
+                    "const": "normalized_original_background"
+                  },
+                  "evidence": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "source": {
+                        "enum": [
+                          "human",
+                          "cad",
+                          "calibrated_geometry",
+                          "segmentation_model",
+                          "vlm",
+                          "catalog",
+                          "estimate",
+                          "proposal",
+                          "synthetic_fixture"
+                        ]
+                      },
+                      "confirmed": {
+                        "type": "boolean"
+                      },
+                      "reviewer": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "notes": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "confidence": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 1
+                      }
+                    },
+                    "required": [
+                      "source",
+                      "confirmed",
+                      "notes"
+                    ]
+                  }
+                },
+                "required": [
+                  "evidence"
+                ],
+                "oneOf": [
+                  {
+                    "required": [
+                      "path"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "empty"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "polygons"
+                    ]
+                  }
+                ],
+                "allOf": [
+                  {
+                    "if": {
+                      "required": [
+                        "polygons"
+                      ]
+                    },
+                    "then": {
+                      "required": [
+                        "coordinate_space"
+                      ]
+                    }
+                  },
+                  {
+                    "if": {
+                      "required": [
+                        "sha256"
+                      ]
+                    },
+                    "then": {
+                      "required": [
+                        "path"
+                      ]
+                    }
+                  },
+                  {
+                    "if": {
+                      "required": [
+                        "exclude_polygons"
+                      ]
+                    },
+                    "then": {
+                      "required": [
+                        "polygons"
+                      ]
+                    }
+                  }
+                ]
+              },
+              "evidence": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "source": {
+                    "enum": [
+                      "human",
+                      "cad",
+                      "calibrated_geometry",
+                      "segmentation_model",
+                      "vlm",
+                      "catalog",
+                      "estimate",
+                      "proposal",
+                      "synthetic_fixture"
+                    ]
+                  },
+                  "confirmed": {
+                    "type": "boolean"
+                  },
+                  "reviewer": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "notes": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "confidence": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  }
+                },
+                "required": [
+                  "source",
+                  "confirmed",
+                  "notes"
+                ]
+              }
+            },
+            "required": [
+              "front_id",
+              "back_id",
+              "region",
+              "evidence"
+            ]
+          },
+          "minItems": 0
+        }
+      },
+      "required": [
+        "lighting",
+        "camera_style",
+        "support_regions",
+        "occlusion_edges"
+      ]
+    },
+    "constraints": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "require_support": {
+          "type": "boolean"
+        },
+        "require_foreground_occlusion": {
+          "type": "boolean"
+        },
+        "require_confirmed_masks": {
+          "type": "boolean"
+        },
+        "background_protection": {
+          "enum": [
+            "strict",
+            "none"
+          ]
+        },
+        "require_stability_evidence": {
+          "type": "boolean"
+        },
+        "enforce_spatial_plan": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "require_support",
+        "require_foreground_occlusion",
+        "require_confirmed_masks",
+        "background_protection",
+        "require_stability_evidence"
+      ]
+    },
+    "generator": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "adapter": {
+          "enum": [
+            "replay",
+            "bailian"
+          ]
+        },
+        "output_registration": {
+          "enum": [
+            "strict",
+            "resize_same_aspect"
+          ]
+        },
+        "alpha_policy": {
+          "enum": [
+            "reject",
+            "near_opaque_unassociated_rgb"
+          ]
+        },
+        "near_opaque_min_alpha": {
+          "type": "integer",
+          "minimum": 250,
+          "maximum": 255
+        },
+        "near_opaque_outlier_min_alpha": {
+          "type": "integer",
+          "minimum": 240,
+          "maximum": 255
+        },
+        "near_opaque_max_outlier_fraction": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 0.0001
+        },
+        "context_crop": {
+          "type": "boolean"
+        },
+        "preserve_full_frame": {
+          "type": "boolean"
+        },
+        "bbox_padding_px": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 64
+        },
+        "refinement_source": {
+          "enum": [
+            "original",
+            "previous_candidate"
+          ]
+        },
+        "layout_hint": {
+          "enum": [
+            "none",
+            "procedural_proxy"
+          ]
+        },
+        "context_padding_ratio": {
+          "type": "number",
+          "minimum": 0.1,
+          "maximum": 1.5
+        },
+        "route": {
+          "enum": [
+            "concept",
+            "guided_generation_then_restore",
+            "native_mask"
+          ]
+        }
+      },
+      "required": [
+        "adapter",
+        "route",
+        "output_registration"
+      ]
+    },
+    "iteration": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "max_rounds": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        },
+        "prompt_mode": {
+          "const": "append_only"
+        },
+        "stop_on_visual_accept": {
+          "type": "boolean"
+        },
+        "continue_on_unknown": {
+          "type": "boolean"
+        }
+      },
+      "required": []
+    },
+    "budget": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "max_image_calls": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10
+        },
+        "max_vlm_calls": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10
+        },
+        "max_candidates": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 80
+        }
+      },
+      "required": [
+        "max_image_calls",
+        "max_vlm_calls",
+        "max_candidates"
+      ]
+    },
+    "harmonization": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "mode": {
+          "enum": [
+            "none",
+            "bounded_lab",
+            "paired_local"
+          ]
+        },
+        "reference_roi": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "path": {
+              "type": "string",
+              "minLength": 1
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "empty": {
+              "const": true
+            },
+            "polygons": {
+              "type": "array",
+              "items": {
+                "type": "array",
+                "items": {
+                  "type": "array",
+                  "items": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  },
+                  "minItems": 2,
+                  "maxItems": 2
+                },
+                "minItems": 3
+              },
+              "minItems": 1
+            },
+            "exclude_polygons": {
+              "type": "array",
+              "items": {
+                "type": "array",
+                "items": {
+                  "type": "array",
+                  "items": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  },
+                  "minItems": 2,
+                  "maxItems": 2
+                },
+                "minItems": 3
+              },
+              "minItems": 1
+            },
+            "coordinate_space": {
+              "const": "normalized_original_background"
+            },
+            "evidence": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "source": {
+                  "enum": [
+                    "human",
+                    "cad",
+                    "calibrated_geometry",
+                    "segmentation_model",
+                    "vlm",
+                    "catalog",
+                    "estimate",
+                    "proposal",
+                    "synthetic_fixture"
+                  ]
+                },
+                "confirmed": {
+                  "type": "boolean"
+                },
+                "reviewer": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "notes": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "confidence": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                }
+              },
+              "required": [
+                "source",
+                "confirmed",
+                "notes"
+              ]
+            }
+          },
+          "required": [
+            "evidence"
+          ],
+          "oneOf": [
+            {
+              "required": [
+                "path"
+              ]
+            },
+            {
+              "required": [
+                "empty"
+              ]
+            },
+            {
+              "required": [
+                "polygons"
+              ]
+            }
+          ],
+          "allOf": [
+            {
+              "if": {
+                "required": [
+                  "polygons"
+                ]
+              },
+              "then": {
+                "required": [
+                  "coordinate_space"
+                ]
+              }
+            },
+            {
+              "if": {
+                "required": [
+                  "sha256"
+                ]
+              },
+              "then": {
+                "required": [
+                  "path"
+                ]
+              }
+            },
+            {
+              "if": {
+                "required": [
+                  "exclude_polygons"
+                ]
+              },
+              "then": {
+                "required": [
+                  "polygons"
+                ]
+              }
+            }
+          ]
+        },
+        "comparable_roi_confirmed": {
+          "type": "boolean"
+        },
+        "max_lab_shift": {
+          "type": "array",
+          "items": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 32
+          },
+          "minItems": 3,
+          "maxItems": 3
+        },
+        "strength": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "blur_sigma_px": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 2
+        },
+        "noise_std": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 4
+        },
+        "noise_seed": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "feedback_correction": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "reason": {
+              "type": "string",
+              "minLength": 1
+            },
+            "object_ids": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+              },
+              "minItems": 1
+            },
+            "chroma_scale": {
+              "type": "number",
+              "minimum": 0.65,
+              "maximum": 1
+            },
+            "detail_sigma_px": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1.5
+            }
+          },
+          "required": [
+            "enabled",
+            "reason",
+            "object_ids",
+            "chroma_scale",
+            "detail_sigma_px"
+          ]
+        },
+        "feather_radius_px": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 16
+        },
+        "paired_anchors": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+              },
+              "mask": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "path": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "sha256": {
+                    "type": "string",
+                    "pattern": "^[a-f0-9]{64}$"
+                  },
+                  "empty": {
+                    "const": true
+                  },
+                  "polygons": {
+                    "type": "array",
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "array",
+                        "items": {
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 1
+                        },
+                        "minItems": 2,
+                        "maxItems": 2
+                      },
+                      "minItems": 3
+                    },
+                    "minItems": 1
+                  },
+                  "exclude_polygons": {
+                    "type": "array",
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "array",
+                        "items": {
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 1
+                        },
+                        "minItems": 2,
+                        "maxItems": 2
+                      },
+                      "minItems": 3
+                    },
+                    "minItems": 1
+                  },
+                  "coordinate_space": {
+                    "const": "normalized_original_background"
+                  },
+                  "evidence": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "source": {
+                        "enum": [
+                          "human",
+                          "cad",
+                          "calibrated_geometry",
+                          "segmentation_model",
+                          "vlm",
+                          "catalog",
+                          "estimate",
+                          "proposal",
+                          "synthetic_fixture"
+                        ]
+                      },
+                      "confirmed": {
+                        "type": "boolean"
+                      },
+                      "reviewer": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "notes": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "confidence": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 1
+                      }
+                    },
+                    "required": [
+                      "source",
+                      "confirmed",
+                      "notes"
+                    ]
+                  }
+                },
+                "required": [
+                  "evidence"
+                ],
+                "oneOf": [
+                  {
+                    "required": [
+                      "path"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "empty"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "polygons"
+                    ]
+                  }
+                ],
+                "allOf": [
+                  {
+                    "if": {
+                      "required": [
+                        "polygons"
+                      ]
+                    },
+                    "then": {
+                      "required": [
+                        "coordinate_space"
+                      ]
+                    }
+                  },
+                  {
+                    "if": {
+                      "required": [
+                        "sha256"
+                      ]
+                    },
+                    "then": {
+                      "required": [
+                        "path"
+                      ]
+                    }
+                  },
+                  {
+                    "if": {
+                      "required": [
+                        "exclude_polygons"
+                      ]
+                    },
+                    "then": {
+                      "required": [
+                        "polygons"
+                      ]
+                    }
+                  }
+                ]
+              },
+              "description": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "id",
+              "mask",
+              "description"
+            ]
+          },
+          "minItems": 1,
+          "maxItems": 16
+        },
+        "allow_proposed_anchors": {
+          "type": "boolean"
+        },
+        "min_anchor_pixels": {
+          "type": "integer",
+          "minimum": 32,
+          "maximum": 1000000
+        },
+        "max_exposure_stops": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "max_chromatic_stops": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 0.5
+        },
+        "max_pair_residual": {
+          "type": "number",
+          "minimum": 0.001,
+          "maximum": 1
+        },
+        "min_pair_inlier_fraction": {
+          "type": "number",
+          "minimum": 0.1,
+          "maximum": 1
+        },
+        "anchor_failure_policy": {
+          "enum": [
+            "stop",
+            "skip_unreliable"
+          ]
+        },
+        "min_reliable_anchors": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 16
+        },
+        "surface_adjustments": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+              },
+              "object_id": {
+                "type": "string",
+                "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+              },
+              "region": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "path": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "sha256": {
+                    "type": "string",
+                    "pattern": "^[a-f0-9]{64}$"
+                  },
+                  "empty": {
+                    "const": true
+                  },
+                  "polygons": {
+                    "type": "array",
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "array",
+                        "items": {
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 1
+                        },
+                        "minItems": 2,
+                        "maxItems": 2
+                      },
+                      "minItems": 3
+                    },
+                    "minItems": 1
+                  },
+                  "exclude_polygons": {
+                    "type": "array",
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "array",
+                        "items": {
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 1
+                        },
+                        "minItems": 2,
+                        "maxItems": 2
+                      },
+                      "minItems": 3
+                    },
+                    "minItems": 1
+                  },
+                  "coordinate_space": {
+                    "const": "normalized_original_background"
+                  },
+                  "evidence": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "source": {
+                        "enum": [
+                          "human",
+                          "cad",
+                          "calibrated_geometry",
+                          "segmentation_model",
+                          "vlm",
+                          "catalog",
+                          "estimate",
+                          "proposal",
+                          "synthetic_fixture"
+                        ]
+                      },
+                      "confirmed": {
+                        "type": "boolean"
+                      },
+                      "reviewer": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "notes": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "confidence": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 1
+                      }
+                    },
+                    "required": [
+                      "source",
+                      "confirmed",
+                      "notes"
+                    ]
+                  }
+                },
+                "required": [
+                  "evidence"
+                ],
+                "oneOf": [
+                  {
+                    "required": [
+                      "path"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "empty"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "polygons"
+                    ]
+                  }
+                ],
+                "allOf": [
+                  {
+                    "if": {
+                      "required": [
+                        "polygons"
+                      ]
+                    },
+                    "then": {
+                      "required": [
+                        "coordinate_space"
+                      ]
+                    }
+                  },
+                  {
+                    "if": {
+                      "required": [
+                        "sha256"
+                      ]
+                    },
+                    "then": {
+                      "required": [
+                        "path"
+                      ]
+                    }
+                  },
+                  {
+                    "if": {
+                      "required": [
+                        "exclude_polygons"
+                      ]
+                    },
+                    "then": {
+                      "required": [
+                        "polygons"
+                      ]
+                    }
+                  }
+                ]
+              },
+              "chroma_scale": {
+                "type": "number",
+                "minimum": 0.25,
+                "maximum": 1
+              },
+              "max_lab_chroma": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 128
+              },
+              "highlight_knee_l": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 100
+              },
+              "highlight_slope": {
+                "type": "number",
+                "minimum": 0.1,
+                "maximum": 1
+              },
+              "strength": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              "fill_unassigned_visible": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "id",
+              "object_id",
+              "region"
+            ]
+          },
+          "minItems": 0,
+          "maxItems": 64
+        }
+      },
+      "required": [
+        "mode"
+      ]
+    },
+    "evaluation": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "center_error_max": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "rotation_error_max_deg": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 90
+        },
+        "scale_log_error_max": {
+          "type": "number",
+          "minimum": 0
+        },
+        "mask_iou_min": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "contact_gap_max_px": {
+          "type": "number",
+          "minimum": 0
+        },
+        "min_changed_visible_fraction": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "required_visual_checks": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "identity",
+              "support",
+              "occlusion",
+              "material",
+              "lighting",
+              "style",
+              "object_count",
+              "realism"
+            ]
+          },
+          "minItems": 1
+        },
+        "require_observed_masks": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "center_error_max",
+        "scale_log_error_max",
+        "mask_iou_min",
+        "contact_gap_max_px",
+        "min_changed_visible_fraction",
+        "required_visual_checks",
+        "require_observed_masks"
+      ]
+    },
+    "candidate_geometry": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "method": {
+          "enum": [
+            "grabcut_difference",
+            "vlm_seeded_grabcut"
+          ]
+        },
+        "seed": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2147483647
+        },
+        "iterations": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 8
+        },
+        "max_side": {
+          "type": "integer",
+          "minimum": 256,
+          "maximum": 1600
+        },
+        "difference_floor": {
+          "type": "number",
+          "minimum": 1,
+          "maximum": 64
+        },
+        "max_background_difference": {
+          "type": "number",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "min_visible_iou": {
+          "type": "number",
+          "minimum": 0.01,
+          "maximum": 1
+        },
+        "max_escape_fraction": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 0.5
+        },
+        "contact_tolerance_px": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "min_seed_density": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "min_area_ratio": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "max_area_ratio": {
+          "type": "number",
+          "minimum": 1,
+          "maximum": 10
+        },
+        "max_component_count": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 64
+        },
+        "reject_on_risk": {
+          "type": "boolean"
+        },
+        "analysis_context": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "method",
+        "seed",
+        "reject_on_risk"
+      ]
+    },
+    "registration": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "max_side": {
+          "type": "integer",
+          "minimum": 512,
+          "maximum": 2400
+        },
+        "min_inliers": {
+          "type": "integer",
+          "minimum": 20,
+          "maximum": 1000
+        },
+        "max_rotation_deg": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 3
+        },
+        "max_scale_log": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 0.05
+        },
+        "max_translation_ratio": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 0.05
+        },
+        "max_reprojection_px": {
+          "type": "number",
+          "minimum": 0.1,
+          "maximum": 8
+        }
+      },
+      "required": []
+    },
+    "contact_rendering": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "search_radius_px": {
+          "type": "number",
+          "minimum": 4,
+          "maximum": 120
+        },
+        "sigma_px": {
+          "type": "number",
+          "minimum": 0.5,
+          "maximum": 8
+        },
+        "strength": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 0.25
+        }
+      },
+      "required": [
+        "enabled"
+      ]
+    },
+    "output_dir": {
+      "type": "string",
+      "minLength": 1
+    },
+    "prompt_notes": {
+      "type": "string",
+      "minLength": 1
+    },
+    "prompt_directives": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "scene_style": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 0
+        },
+        "negative": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 0
+        }
+      },
+      "required": []
+    }
+  },
+  "required": [
+    "schema_version",
+    "task_id",
+    "workspace",
+    "mode",
+    "background",
+    "objects",
+    "scene",
+    "constraints",
+    "generator",
+    "budget",
+    "harmonization",
+    "evaluation",
+    "output_dir"
+  ]
+}

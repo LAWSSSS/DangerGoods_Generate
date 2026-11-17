@@ -1,0 +1,82 @@
+{
+  "schema_version": "2.0",
+  "master_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+  "reviewer": "待填写实际审核人",
+  "notes": "待填写针对当前母版的实际检查记录；模板未代表已审核",
+  "checks": {
+    "identity": {
+      "status": "UNKNOWN",
+      "notes": "尚未检查"
+    },
+    "support": {
+      "status": "UNKNOWN",
+      "notes": "尚未检查"
+    },
+    "occlusion": {
+      "status": "UNKNOWN",
+      "notes": "尚未检查"
+    },
+    "material": {
+      "status": "UNKNOWN",
+      "notes": "尚未检查"
+    },
+    "lighting": {
+      "status": "UNKNOWN",
+      "notes": "尚未检查"
+    },
+    "style": {
+      "status": "UNKNOWN",
+      "notes": "尚未检查"
+    },
+    "object_count": {
+      "status": "UNKNOWN",
+      "notes": "尚未检查"
+    },
+    "realism": {
+      "status": "UNKNOWN",
+      "notes": "尚未检查"
+    }
+  },
+  "objects": [
+    {
+      "id": "S01",
+      "mask_matches_master_confirmed": false,
+      "amodal_mask": {
+        "path": "work/annotation/S01_amodal_mask.png",
+        "evidence": {
+          "source": "proposal",
+          "confirmed": false,
+          "notes": "格式示例：请替换为针对最终母版的实际轮廓及真实审核记录"
+        }
+      },
+      "visible_mask": {
+        "path": "work/annotation/S01_visible_mask.png",
+        "evidence": {
+          "source": "proposal",
+          "confirmed": false,
+          "notes": "格式示例：请替换为针对最终母版的实际轮廓及真实审核记录"
+        }
+      }
+    },
+    {
+      "id": "S20",
+      "mask_matches_master_confirmed": false,
+      "amodal_mask": {
+        "path": "work/annotation/S20_amodal_mask.png",
+        "evidence": {
+          "source": "proposal",
+          "confirmed": false,
+          "notes": "格式示例：请替换为针对最终母版的实际轮廓及真实审核记录"
+        }
+      },
+      "visible_mask": {
+        "path": "work/annotation/S20_visible_mask.png",
+        "evidence": {
+          "source": "proposal",
+          "confirmed": false,
+          "notes": "格式示例：请替换为针对最终母版的实际轮廓及真实审核记录"
+        }
+      }
+    }
+  ]
+}

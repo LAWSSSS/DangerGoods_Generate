@@ -1,0 +1,483 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "2.0"
+    },
+    "master_sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "reviewer": {
+      "type": "string",
+      "minLength": 1
+    },
+    "notes": {
+      "type": "string",
+      "minLength": 1
+    },
+    "checks": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "identity": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "status": {
+              "enum": [
+                "PASS",
+                "FAIL",
+                "UNKNOWN"
+              ]
+            },
+            "notes": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "status",
+            "notes"
+          ]
+        },
+        "support": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "status": {
+              "enum": [
+                "PASS",
+                "FAIL",
+                "UNKNOWN"
+              ]
+            },
+            "notes": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "status",
+            "notes"
+          ]
+        },
+        "occlusion": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "status": {
+              "enum": [
+                "PASS",
+                "FAIL",
+                "UNKNOWN"
+              ]
+            },
+            "notes": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "status",
+            "notes"
+          ]
+        },
+        "material": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "status": {
+              "enum": [
+                "PASS",
+                "FAIL",
+                "UNKNOWN"
+              ]
+            },
+            "notes": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "status",
+            "notes"
+          ]
+        },
+        "lighting": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "status": {
+              "enum": [
+                "PASS",
+                "FAIL",
+                "UNKNOWN"
+              ]
+            },
+            "notes": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "status",
+            "notes"
+          ]
+        },
+        "style": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "status": {
+              "enum": [
+                "PASS",
+                "FAIL",
+                "UNKNOWN"
+              ]
+            },
+            "notes": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "status",
+            "notes"
+          ]
+        },
+        "object_count": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "status": {
+              "enum": [
+                "PASS",
+                "FAIL",
+                "UNKNOWN"
+              ]
+            },
+            "notes": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "status",
+            "notes"
+          ]
+        },
+        "realism": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "status": {
+              "enum": [
+                "PASS",
+                "FAIL",
+                "UNKNOWN"
+              ]
+            },
+            "notes": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "status",
+            "notes"
+          ]
+        }
+      },
+      "required": [
+        "identity",
+        "support",
+        "occlusion",
+        "material",
+        "lighting",
+        "style",
+        "object_count",
+        "realism"
+      ]
+    },
+    "objects": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+          },
+          "amodal_mask": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "path": {
+                "type": "string",
+                "minLength": 1
+              },
+              "sha256": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              },
+              "empty": {
+                "const": true
+              },
+              "polygons": {
+                "type": "array",
+                "items": {
+                  "type": "array",
+                  "items": {
+                    "type": "array",
+                    "items": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1
+                    },
+                    "minItems": 2,
+                    "maxItems": 2
+                  },
+                  "minItems": 3
+                },
+                "minItems": 1
+              },
+              "coordinate_space": {
+                "const": "normalized_original_background"
+              },
+              "evidence": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "source": {
+                    "enum": [
+                      "human",
+                      "cad",
+                      "calibrated_geometry",
+                      "segmentation_model",
+                      "vlm",
+                      "catalog",
+                      "estimate",
+                      "proposal",
+                      "synthetic_fixture"
+                    ]
+                  },
+                  "confirmed": {
+                    "type": "boolean"
+                  },
+                  "reviewer": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "notes": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "confidence": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  }
+                },
+                "required": [
+                  "source",
+                  "confirmed",
+                  "notes"
+                ]
+              }
+            },
+            "required": [
+              "evidence"
+            ],
+            "oneOf": [
+              {
+                "required": [
+                  "path"
+                ]
+              },
+              {
+                "required": [
+                  "empty"
+                ]
+              },
+              {
+                "required": [
+                  "polygons"
+                ]
+              }
+            ],
+            "allOf": [
+              {
+                "if": {
+                  "required": [
+                    "polygons"
+                  ]
+                },
+                "then": {
+                  "required": [
+                    "coordinate_space"
+                  ]
+                }
+              },
+              {
+                "if": {
+                  "required": [
+                    "sha256"
+                  ]
+                },
+                "then": {
+                  "required": [
+                    "path"
+                  ]
+                }
+              }
+            ]
+          },
+          "visible_mask": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "path": {
+                "type": "string",
+                "minLength": 1
+              },
+              "sha256": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              },
+              "empty": {
+                "const": true
+              },
+              "polygons": {
+                "type": "array",
+                "items": {
+                  "type": "array",
+                  "items": {
+                    "type": "array",
+                    "items": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1
+                    },
+                    "minItems": 2,
+                    "maxItems": 2
+                  },
+                  "minItems": 3
+                },
+                "minItems": 1
+              },
+              "coordinate_space": {
+                "const": "normalized_original_background"
+              },
+              "evidence": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "source": {
+                    "enum": [
+                      "human",
+                      "cad",
+                      "calibrated_geometry",
+                      "segmentation_model",
+                      "vlm",
+                      "catalog",
+                      "estimate",
+                      "proposal",
+                      "synthetic_fixture"
+                    ]
+                  },
+                  "confirmed": {
+                    "type": "boolean"
+                  },
+                  "reviewer": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "notes": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "confidence": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  }
+                },
+                "required": [
+                  "source",
+                  "confirmed",
+                  "notes"
+                ]
+              }
+            },
+            "required": [
+              "evidence"
+            ],
+            "oneOf": [
+              {
+                "required": [
+                  "path"
+                ]
+              },
+              {
+                "required": [
+                  "empty"
+                ]
+              },
+              {
+                "required": [
+                  "polygons"
+                ]
+              }
+            ],
+            "allOf": [
+              {
+                "if": {
+                  "required": [
+                    "polygons"
+                  ]
+                },
+                "then": {
+                  "required": [
+                    "coordinate_space"
+                  ]
+                }
+              },
+              {
+                "if": {
+                  "required": [
+                    "sha256"
+                  ]
+                },
+                "then": {
+                  "required": [
+                    "path"
+                  ]
+                }
+              }
+            ]
+          },
+          "mask_matches_master_confirmed": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "mask_matches_master_confirmed"
+        ]
+      },
+      "minItems": 0
+    }
+  },
+  "required": [
+    "schema_version",
+    "master_sha256",
+    "reviewer",
+    "notes",
+    "checks",
+    "objects"
+  ]
+}
