@@ -3,8 +3,10 @@ config_bailian.yaml
 .env
 .env.*
 
-# Generated outputs
-output/
+# Generated outputs. Keep the empty directory layout.
+output/**
+!output/**/
+!output/**/.gitkeep
 
 # Python
 __pycache__/
